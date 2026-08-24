@@ -58,7 +58,48 @@ stack proposal in `docs/ARCHITECTURE.md`).
 
 ## Phase 1 — System Architecture
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+- Bounded responsibilities and service boundaries for every module, plus an
+  enforceable boundary rule (modules only interact via public service
+  interfaces or domain events — no reaching into another module's tables).
+- System container diagram (Mermaid).
+- Data flow (trip lifecycle — how snapshots accumulate and feed risk).
+- Request flow (Mermaid sequence diagram — command-bar question end to
+  end through the tool layer and back).
+- Event flow (flight change → risk recompute → recommendation →
+  notification, with idempotency keyed on entity id + snapshot id).
+- AI tool flow with concrete execution limits (max 8 tool calls/run, 30s
+  wall-clock cap, no agent-to-agent recursion).
+- Error propagation policy, including the fixed success/error JSON
+  envelope shape.
+- Authentication flow (Mermaid sequence diagram) — decided on Auth.js with
+  database-backed sessions (not JWT) specifically so sessions are
+  server-side revocable.
+- Document-processing flow at the architecture level (deep pipeline detail
+  deferred to Phase 14–15 on purpose).
+- Explicit "deferred to later phases" list so Phase 1 doesn't overreach
+  into implementation decisions that belong to later phases.
+
+**Files changed:**
+- `docs/ARCHITECTURE.md` — restructured and substantially expanded (all of
+  the above added as new sections 5–14; old placeholder ASCII diagram and
+  "open questions" section replaced with a decisions log).
+
+**Tests:** N/A (no application code yet — this phase is design-only, per
+the brief). All 8 Mermaid diagrams were syntax-checked programmatically
+(bracket balance + subgraph/alt block closure) before commit rather than
+just visually reviewed.
+
+**Known limitations:**
+- Auth strategy is decided at the architecture level (Auth.js, DB
+  sessions) but not yet implemented — that's Phase 4.
+- `ZENSERP_API_KEY` verification is still outstanding (see Phase 0 entry).
+
+**Next phase:** Phase 2 — Project Foundation (TypeScript strict mode,
+environment config/validation, error handling, logging, API response
+conventions, initial folder scaffold, linting, foundational tests).
 
 ---
 
