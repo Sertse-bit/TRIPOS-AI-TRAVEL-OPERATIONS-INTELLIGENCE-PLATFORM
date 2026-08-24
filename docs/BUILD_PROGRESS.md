@@ -35,10 +35,14 @@ explicit stop-and-approve checkpoint.
 - `.env.example` committed with variable names only (no values).
   `.env.local` holds real values locally and is git-ignored — see
   `.gitignore`. Real values are never committed.
-- **Needs verification:** `ZENSERP_API_KEY` is currently identical to
-  `AVIATIONSTACK_API_KEY`. These are unrelated vendors, so this is almost
-  certainly a copy/paste error and must be fixed before the Research Agent
-  (Phase 13) depends on it.
+- **Resolved 2026-08-24:** `ZENSERP_API_KEY` was corrected. The original
+  value was a duplicate of `AVIATIONSTACK_API_KEY` (copy/paste error); the
+  replacement is UUID-formatted, consistent with Zenserp's real key
+  convention, and confirmed unique against all 11 stored credentials.
+  Not live-tested (sandbox network egress to provider domains is blocked,
+  per the constraint noted above) — format and uniqueness checks pass,
+  live validity will surface whenever the Research Agent (Phase 13)
+  actually calls it.
 - **Unmapped:** `MARKETSTACK_API_KEY` (stock market data) has no identified
   use case in TripOS. Left unused pending a real justification, per the
   "no dependencies without justification" rule.

@@ -51,7 +51,7 @@ src/
 |------|----------|
 | 2026-08-24 | Stack approved as proposed in Phase 0 (no changes requested). |
 | 2026-08-24 | External API keys received for 11 providers (8 from the original brief plus ExchangeRate, Mailboxlayer, Marketstack). See `docs/BUILD_PROGRESS.md` for status; real values live only in git-ignored `.env.local`. |
-| 2026-08-24 | `ZENSERP_API_KEY` flagged as needing verification (identical to `AVIATIONSTACK_API_KEY`, likely copy/paste error) — blocks real use of the Research Agent (Phase 13) until resolved. |
+| 2026-08-24 | `ZENSERP_API_KEY` corrected — original value was a duplicate of `AVIATIONSTACK_API_KEY`; replaced with a UUID-format key consistent with Zenserp's real key convention. No longer blocks the Research Agent (Phase 13). |
 | 2026-08-24 | `MARKETSTACK_API_KEY` has no mapped use case in TripOS; left configured but unused. |
 | 2026-08-24 | Auth strategy decided: Auth.js with credentials provider + Prisma-backed database sessions (not JWT) — chosen so sessions can be revoked server-side immediately, which matters for a "Security Engineer" pass in Phase 4. |
 | 2026-08-24 | CI will not configure a real deployment target, per brief Section 31, unless explicitly requested later. |
