@@ -194,7 +194,65 @@ documented), `.env.local` (real local values, not committed).
 
 ## Phase 3 — Database Architecture
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- Full `prisma/schema.prisma`: 17 tables (15 from the brief + 2 justified
+  additions — `flight_status_snapshots`, `sessions`), 8 enums, all
+  relations, indexes, and the `pgvector` extension wired in for
+  `document_chunks.embedding`.
+- `docs/DATABASE.md` — ERD (Mermaid `erDiagram`), rationale for every
+  non-obvious design decision, and an honest "known gaps" section.
+- `prisma/seed.ts` — real seed script against the Prisma Client API.
+
+**Sandbox limitation (documented in full in `docs/DATABASE.md`):**
+Prisma's CLI (`generate`/`migrate`/`validate`) fetches its schema-engine
+binary from `binaries.prisma.sh` at runtime. That domain isn't in this
+sandbox's network allowlist — confirmed on both Prisma 7 and Prisma 6, so
+it isn't a version-specific issue, and confirmed it isn't a
+locally-cached-binary problem either (no engine binaries exist anywhere
+in `node_modules` prior to the failed fetch). This is sandbox-only: a
+normal dev machine, CI runner, or Docker build has standard internet
+access and will run these commands without issue.
+
+Given that, the schema was verified a different way: hand-translated into
+equivalent raw SQL DDL and applied directly to a **live, local PostgreSQL
+16 + pgvector 0.6.0** instance (installed via `apt` from the allowed
+Ubuntu mirrors — zero external network dependency at runtime). This is
+schema verification via real database execution, not a substitute for
+Prisma specifically, but a genuine test of the relational design itself.
+
+**Tests (all executed for real against the live database, not asserted):**
+
+- All 17 tables + 8 enums + every index (including the `hnsw` vector
+  index) created with zero errors.
+- Full realistic insert chain across all 13 populated tables: user → trip
+  → destination → flight → 2 append-only flight status snapshots →
+  weather snapshot → currency snapshot → document → document chunk (real
+  1536-dim vector) → risk assessment → recommendation → trip event.
+- `trip_events.dedupe_key` unique constraint **correctly rejected** a
+  duplicate insert, proving the Phase 1 idempotency design holds at the
+  database level, not just on paper.
+- Real pgvector cosine-distance query (`<=>`) against the HNSW index
+  executed and returned a result.
+- `ON DELETE CASCADE`: deleting the test trip correctly cascaded through
+  every dependent row, confirmed via row counts before/after, while
+  leaving the owning user intact.
+- Test data cleaned up afterward — the live dev database is empty going
+  into Phase 4.
+
+**Known limitations:**
+
+- No `prisma/migrations/` directory yet — the first real migration will
+  be generated wherever this next runs with normal internet access.
+- No DB-level `CHECK` constraints on `risk_score`/`confidence` ranges yet
+  (application-level only) — see `docs/DATABASE.md` known gaps.
+- `prisma/seed.ts` targets the real Prisma Client API correctly but
+  wasn't executed end-to-end itself (it needs `prisma generate` first);
+  the data shape it produces was verified via the raw SQL pass instead.
+
+**Next phase:** Phase 4 — Authentication & Security Foundation.
 
 ---
 
