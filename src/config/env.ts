@@ -9,8 +9,8 @@ import { z } from "zod";
  * of failing confusingly later inside a request handler.
  *
  * Nothing in this module is exposed to the browser. Do not import this
- * from client components — it is server-only by construction (no
- * NEXT_PUBLIC_ variables are read here).
+ * from client components — it is server-only by construction, and
+ * defines no browser-exposed (Next.js public-prefixed) variables.
  */
 
 const envSchema = z.object({

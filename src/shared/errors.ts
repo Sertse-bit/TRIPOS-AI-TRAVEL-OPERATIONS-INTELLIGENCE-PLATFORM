@@ -50,7 +50,15 @@ export class AppError extends Error {
     this.code = code;
     this.httpStatus = STATUS_BY_CODE[code];
     this.details = details;
-    Object.setPrototypeOf(this, AppError.prototype);
+    // No Object.setPrototypeOf() here: that pattern exists only to fix
+    // `class extends Error` under pre-ES2015 transpilation targets. This
+    // project targets ES2017 (tsconfig.json), where native class
+    // extension already sets up the prototype chain correctly — and
+    // calling it here would actively break things, resetting every
+    // subclass's prototype back to AppError.prototype specifically and
+    // making `instanceof SpecificSubclass` checks fail. Caught by a real
+    // test (rate-limit.test.ts expecting instanceof RateLimitedError),
+    // not by inspection.
   }
 }
 

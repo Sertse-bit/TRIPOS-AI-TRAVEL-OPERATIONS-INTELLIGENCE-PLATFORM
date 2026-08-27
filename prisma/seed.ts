@@ -1,3 +1,7 @@
+// NOTE: this file is excluded from the main tsconfig.json typecheck scope
+// (see "exclude") because @/generated/prisma doesn't exist until
+// `prisma generate` has run successfully — blocked in this sandbox, see
+// docs/DATABASE.md. It will typecheck normally wherever generate can run.
 import { PrismaClient } from "@/generated/prisma";
 import { randomBytes, scryptSync } from "node:crypto";
 

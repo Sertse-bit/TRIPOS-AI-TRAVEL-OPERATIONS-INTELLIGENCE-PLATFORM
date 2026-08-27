@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AppError, isAppError } from "@/shared/errors";
 import { createRequestLogger, logger } from "@/infrastructure/logger";
@@ -46,16 +46,31 @@ function errorResponse(
  * expected failure. Anything else thrown is treated as a bug: logged with
  * full detail server-side, but the client only ever sees a generic 500 —
  * no stack traces, no internal messages leak out (Section 11).
+ *
+ * The wrapped function's parameter is always typed as NextRequest — that
+ * matches what Next.js actually invokes every route handler with,
+ * regardless of whether a given handler needs it. Handlers that don't
+ * (see app/api/health/route.ts) simply declare fewer parameters and
+ * ignore it; that's a normal, safely-typed JS/TS pattern, not a hack.
+ * An earlier version made the request type generic and defaulted it to
+ * `undefined` when unspecified, which broke Next's own route-type
+ * validator (`.next/types/validator.ts`) for any handler that didn't
+ * explicitly parameterize it — caught by `pnpm typecheck`, not by
+ * inspection.
  */
 export function withApiHandler<T>(
-  handler: (requestId: string, log: ReturnType<typeof createRequestLogger>) => Promise<T>,
+  handler: (
+    requestId: string,
+    log: ReturnType<typeof createRequestLogger>,
+    request: NextRequest,
+  ) => Promise<T>,
 ) {
-  return async function wrapped() {
+  return async function wrapped(request: NextRequest) {
     const requestId = generateRequestId();
     const log = createRequestLogger(requestId);
 
     try {
-      const result = await handler(requestId, log);
+      const result = await handler(requestId, log, request);
       return successResponse(result, requestId);
     } catch (error) {
       if (isAppError(error)) {

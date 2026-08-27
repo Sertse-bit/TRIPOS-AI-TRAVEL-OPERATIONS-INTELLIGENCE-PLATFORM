@@ -47,4 +47,22 @@ describe("AppError subclasses", () => {
     expect(err instanceof AppError).toBe(true);
     expect(err instanceof Error).toBe(true);
   });
+
+  it("instanceof works against each SPECIFIC subclass, not just AppError", () => {
+    // Regression test: an earlier version of AppError called
+    // Object.setPrototypeOf(this, AppError.prototype) in its own
+    // constructor, which reset every subclass instance's prototype back
+    // to AppError.prototype specifically. That made `instanceof AppError`
+    // pass while `instanceof <SpecificSubclass>` silently failed — a real
+    // bug caught by rate-limit.test.ts expecting
+    // `.rejects.toBeInstanceOf(RateLimitedError)`, not by this file, since
+    // this file only checked instanceof AppError/Error before. Checking
+    // every subclass here closes that gap.
+    expect(new ValidationError("x") instanceof ValidationError).toBe(true);
+    expect(new UnauthenticatedError() instanceof UnauthenticatedError).toBe(true);
+    expect(new UnauthorizedError() instanceof UnauthorizedError).toBe(true);
+    expect(new NotFoundError("Trip") instanceof NotFoundError).toBe(true);
+    expect(new ConflictError("x") instanceof ConflictError).toBe(true);
+    expect(new ProviderError("aviationstack", "x") instanceof ProviderError).toBe(true);
+  });
 });

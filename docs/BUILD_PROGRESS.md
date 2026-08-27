@@ -258,7 +258,101 @@ Prisma specifically, but a genuine test of the relational design itself.
 
 ## Phase 4 — Authentication & Security Foundation
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- Credentials-based auth, hand-rolled rather than via `next-auth`/Auth.js
+  — see the 2026-08-25 decisions-log entry in `docs/ARCHITECTURE.md` for
+  why (the Phase 3 `sessions` table stores a token hash, which doesn't
+  match Auth.js's official adapter contract).
+- **Interim data-access approach**: since Prisma Client can't be
+  generated in this sandbox (Phase 3), `src/modules/auth/*-repository.ts`
+  use `pg` directly against the identical schema, isolated behind a
+  repository interface so migrating to Prisma Client later — once
+  `prisma generate` can run in a normal environment — is a contained
+  change, not a rewrite of anything that calls them.
+- `password.ts` — Node built-in `scrypt` (N=16384, r=8, p=1; OWASP-acceptable,
+  zero native-compiled dependencies), NIST 800-63B-style length-based
+  strength policy (12–128 chars, no composition-rule theater).
+- `session.ts` — random 32-byte token, SHA-256-hashed for storage
+  (fast hash, deliberately not scrypt — a session token is already
+  high-entropy, nothing to brute-force), httpOnly/sameSite=lax cookie,
+  30-day expiry.
+- `access-control.ts` — `requireAuth()` / `requireRole()`. Resource-level
+  ownership checks deliberately deferred to each domain module as built
+  (Phase 7+), not built prematurely here.
+- `rate-limit.ts` — Redis fixed-window limiter, fails open if Redis is
+  unreachable (documented tradeoff: an auth outage is worse than a
+  temporary loss of brute-force protection).
+- `file-validation.ts` — magic-byte sniffing via `file-type`, not
+  trusting client-supplied MIME type; built now per Phase 4's explicit
+  ask, but the actual upload route is Phase 14's job.
+- Routes: `/api/auth/{register,login,logout,me}`. Login rate-limited by
+  both IP and email; timing-safe on the "user doesn't exist" path via a
+  cached dummy hash so it costs the same as a real wrong-password check.
+- `next.config.ts` — security headers (X-Frame-Options, CSP, etc.).
+- `docs/SECURITY.md` — full writeup of every decision and honest known
+  gaps (no 2FA, no email verification flow yet, no DB-level range
+  constraints, passport-number encryption-at-rest still outstanding).
+- `env-safety.test.ts` — automated, not just documented: fails the suite
+  if any secret-shaped env var ever gets a `NEXT_PUBLIC_` prefix.
+
+**Two real bugs found by tests, not inspection, and fixed:**
+
+1. Phase 2's `AppError` had `Object.setPrototypeOf(this, AppError.prototype)`
+   in its base constructor — a fix for pre-ES2015 `class extends Error`
+   transpilation that this ES2017-targeting project doesn't need, and
+   which actively broke things: it reset every subclass instance's
+   prototype back to `AppError.prototype`, so `instanceof AppError` passed
+   while `instanceof RateLimitedError` (or any specific subclass) silently
+   failed. Caught by `rate-limit.test.ts` expecting
+   `.rejects.toBeInstanceOf(RateLimitedError)`. Fixed; added a regression
+   test in `errors.test.ts` checking every subclass specifically.
+2. `env-safety.test.ts` itself had a false positive: its own bare
+   substring check for `NEXT_PUBLIC_` matched against `env.ts`'s comment
+   _explaining_ that no such variable exists there. Fixed by checking for
+   actual declaration/access patterns instead of bare text.
+3. `withApiHandler`'s first design made the forwarded request type generic
+   (defaulting to `undefined`), which broke Next.js's own route-type
+   validator for any handler not explicitly parameterizing it — caught by
+   `pnpm typecheck`, fixed by always typing it as `NextRequest` (what
+   Next.js actually always passes).
+4. Node's `crypto.scrypt`, wrapped in `promisify()`, has its TypeScript
+   overload resolved to the wrong (no-options) signature by default —
+   caught by `pnpm typecheck`, fixed with an explicit type annotation
+   selecting the correct overload rather than losing type safety with `any`.
+
+**Tests — all executed for real:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 31/31 passing (added: password hashing x9, rate limiting
+  x4 against real Redis, file validation x8 against real magic bytes,
+  env-safety x3, plus the errors.ts regression test)
+- `pnpm build` → succeeded, all 5 auth routes correctly registered as
+  dynamic
+- **Full live end-to-end auth flow**, booted server + real Postgres,
+  9-step curl sequence: register (200, no passwordHash leaked) → duplicate
+  register (409) → weak password (400, exact message) → authenticated
+  `/me` (200) → unauthenticated `/me` (401) → wrong-password login (401,
+  generic message) → correct login (200, new session) → logout (200) →
+  `/me` after logout (**401 — proves the session was actually revoked
+  server-side, not just that a cookie was cleared client-side**, the core
+  justification for DB-backed sessions over JWT).
+- Security headers confirmed present via live `curl -I`.
+- Rate limiting confirmed to trigger at the exact configured threshold:
+  8 failed login attempts against one email returned 401, the 9th
+  returned 429.
+- All test data cleaned up afterward; dev database is empty.
+
+**Known limitations:** see `docs/SECURITY.md` "Known gaps" — no 2FA, no
+email verification/password reset flow (Mailboxlayer deferred to Phase 5
+on purpose, to avoid a one-off external call ahead of the provider
+abstraction layer), no CSRF token (relying on SameSite=Lax + JSON-only
+endpoints), passport-number encryption-at-rest outstanding.
+
+**Next phase:** Phase 5 — External API Integration Layer.
 
 ---
 
