@@ -358,7 +358,73 @@ endpoints), passport-number encryption-at-rest outstanding.
 
 ## Phase 5 — External API Integration Layer
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `src/integrations/types.ts` — `ExternalProvider` marker interface +
+  shared `fetchJson` helper (one HTTP attempt, normalizes failures to
+  `ProviderError`; retry/backoff is explicitly Phase 6's job, not built
+  here).
+- Eight provider domains, each with a real adapter + documented mock +
+  factory: Aviation (Aviationstack), Weather (Weatherstack), Currency
+  (**two** independent real adapters — Fixer and ExchangeRate — behind
+  one interface, proving the abstraction is genuine), Search (Zenserp),
+  DocumentStorage (Filestack), Geolocation (IPstack), PhoneValidation
+  (Numverify), EmailValidation (Mailboxlayer).
+- `docs/INTEGRATIONS.md` — full writeup, including an honest
+  per-provider table of verification confidence (see below) and the two
+  deliberately-excluded providers (Screenshotlayer: no feature needs it
+  yet; Marketstack: no role in a travel platform).
+- **Closed the loop from Phase 4**: `register/route.ts` now calls
+  Mailboxlayer for email deliverability, failing open on any provider
+  error — exactly what `docs/SECURITY.md`'s known-gaps section said would
+  happen "once Phase 5 lands."
+
+**Verification methodology:** this sandbox's network egress doesn't reach
+any vendor domain (same constraint as Postgres/Redis tooling, Phase 3),
+so no adapter could be smoke-tested live. Instead:
+
+- **Aviationstack, Weatherstack, Fixer/ExchangeRate** response shapes
+  were verified against multiple independent, dated public sources via
+  web search this session — not built from memory alone. This surfaced
+  two genuine, non-obvious findings: Weatherstack returns HTTP 200 even
+  for API-level errors (error only visible in the body shape — now has a
+  dedicated test), and Fixer has migrated to APILayer's unified
+  `api.apilayer.com/<product>` gateway with an `apikey` header, distinct
+  from the legacy `data.fixer.io?access_key=` convention most tutorials
+  still show.
+- **Zenserp, Filestack, IPstack, Numverify, Mailboxlayer** are built from
+  training knowledge, explicitly flagged in code comments and
+  `docs/INTEGRATIONS.md` as not verified this session — re-check before
+  real use, Filestack especially (its actual upload flow has more moving
+  parts than this simple version covers).
+- Every adapter tested by stubbing `fetch` with a realistic fixture and
+  asserting correct normalization, vendor error-shape handling, and
+  rejection of malformed responses — real parsing-logic tests, without
+  needing a live network hop.
+
+**Tests — all executed for real:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 57/57 passing (26 new: 6 aviation, 5 weather, 7 currency
+  covering both vendors via `describe.each`, 8 supporting providers)
+- `pnpm build` → succeeded
+- **Live verification of the fail-open Mailboxlayer path**: with a real
+  (but sandbox-unreachable) `MAILBOXLAYER_API_KEY` configured, a real
+  registration request against the booted server still succeeded
+  end-to-end — the real adapter's genuinely-failing network call was
+  caught and swallowed exactly as designed, not just simulated in a unit
+  test. Test data cleaned up afterward.
+
+**Known limitations:** see `docs/INTEGRATIONS.md`'s verification-
+confidence table — five of eight providers are unverified against live
+docs. `getCurrencyProvider()`'s selection order (Fixer, then ExchangeRate,
+then mock) reflects credential availability only, not a resilience
+fallback on call failure — that composition is explicitly Phase 6's job.
+
+**Next phase:** Phase 6 — API Resilience.
 
 ---
 
