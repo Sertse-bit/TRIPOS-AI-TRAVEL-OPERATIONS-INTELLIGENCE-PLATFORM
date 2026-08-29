@@ -2,6 +2,7 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import { ProviderError } from "@/shared/errors";
 import { type ExternalProvider, fetchJson } from "@/integrations/types";
+import { withResilience } from "@/infrastructure/resilience";
 
 /**
  * Normalized shape every caller works with, regardless of which vendor
@@ -198,13 +199,47 @@ export class MockAviationProvider implements AviationProvider {
   }
 }
 
+// --- Resilient wrapper -----------------------------------------------
+//
+// Wraps the real adapter with caching, retry+backoff, and circuit
+// breaking (Phase 6) — see infrastructure/resilience.ts. Deliberately
+// NOT applied to the mock adapter: there's no real failure mode to be
+// resilient against in a fixture, and wrapping it would just add
+// untested complexity to a path that's already deterministic.
+//
+// Flight status is time-sensitive but doesn't change second-to-second —
+// a 2-minute fresh window avoids hammering the API on repeated checks
+// (e.g. Trip Watch polling, Phase 19) while staying reasonably current.
+// Stale data is kept for degraded-mode use up to 30 minutes past that;
+// a Flight Agent (Phase 10) consuming a `stale: true` result should
+// factor that into its confidence, not treat it as equivalent to live data.
+
+class ResilientAviationProvider implements AviationProvider {
+  readonly providerName: string;
+
+  constructor(private readonly inner: AviationProvider) {
+    this.providerName = inner.providerName;
+  }
+
+  async getFlightStatus(flightIata: string): Promise<NormalizedFlightStatus | null> {
+    const result = await withResilience({
+      providerName: this.inner.providerName,
+      fetchFn: () => this.inner.getFlightStatus(flightIata),
+      cacheKey: `resilience:aviation:${flightIata}`,
+      freshTtlMs: 2 * 60_000,
+      staleTtlMs: 30 * 60_000,
+    });
+    return result.data;
+  }
+}
+
 // --- Factory -----------------------------------------------------------
 
 let cachedProvider: AviationProvider | null = null;
 
 export function getAviationProvider(): AviationProvider {
   cachedProvider ??= env.AVIATIONSTACK_API_KEY
-    ? new AviationstackProvider()
+    ? new ResilientAviationProvider(new AviationstackProvider())
     : new MockAviationProvider();
   return cachedProvider;
 }

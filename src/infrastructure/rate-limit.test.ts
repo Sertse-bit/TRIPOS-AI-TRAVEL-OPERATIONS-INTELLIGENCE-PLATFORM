@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { enforceRateLimit, redis } from "@/infrastructure/rate-limit";
+import { enforceRateLimit } from "@/infrastructure/rate-limit";
+import { redis } from "@/infrastructure/redis";
 import { RateLimitedError } from "@/shared/errors";
 
 describe("enforceRateLimit", () => {

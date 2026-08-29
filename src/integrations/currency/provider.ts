@@ -2,6 +2,7 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import { ProviderError } from "@/shared/errors";
 import { type ExternalProvider, fetchJson } from "@/integrations/types";
+import { withResilience } from "@/infrastructure/resilience";
 
 export interface NormalizedExchangeRate {
   base: string;
@@ -130,21 +131,61 @@ export class MockCurrencyProvider implements CurrencyProvider {
   }
 }
 
-// --- Factory -------------------------------------------------------------
+// --- Resilient wrapper -----------------------------------------------
 //
-// Selection order (Fixer, then ExchangeRate, then mock) reflects which
-// real credential is available — NOT a resilience fallback chain. If
-// Fixer is configured but fails at request time, that failure surfaces
-// as-is here; automatic failover to ExchangeRate on a *failed call* (as
-// opposed to an *absent key*) is Phase 6's job.
+// This is the fallback composition Phase 5 deliberately deferred: if
+// Fixer fails (not just "isn't configured" -- an actual failed call),
+// retry it, and if it's still failing, fail over to ExchangeRate as a
+// genuinely different vendor. Only meaningful when BOTH keys are
+// configured; with just one, there's no second vendor to fail over to.
+//
+// Exchange rates for these tiers typically update once daily, so a
+// 1-hour fresh window is generous, and stale data is kept for a full 24
+// hours past that -- a day-old rate is still a reasonable basis for a
+// travel budget estimate in degraded mode.
+
+class ResilientCurrencyProvider implements CurrencyProvider {
+  readonly providerName: string;
+
+  constructor(
+    private readonly primary: CurrencyProvider,
+    private readonly fallback?: CurrencyProvider,
+  ) {
+    this.providerName = primary.providerName;
+  }
+
+  async getExchangeRate(base: string, target: string): Promise<NormalizedExchangeRate> {
+    const result = await withResilience({
+      providerName: this.primary.providerName,
+      fetchFn: () => this.primary.getExchangeRate(base, target),
+      fallbackFn: this.fallback ? () => this.fallback!.getExchangeRate(base, target) : undefined,
+      fallbackProviderName: this.fallback?.providerName,
+      cacheKey: `resilience:currency:${base}:${target}`,
+      freshTtlMs: 60 * 60_000,
+      staleTtlMs: 24 * 60 * 60_000,
+    });
+    return result.data;
+  }
+}
+
+// --- Factory -------------------------------------------------------------
 
 let cachedProvider: CurrencyProvider | null = null;
 
 export function getCurrencyProvider(): CurrencyProvider {
   if (!cachedProvider) {
-    if (env.FIXER_API_KEY) cachedProvider = new FixerCurrencyProvider();
-    else if (env.EXCHANGERATE_API_KEY) cachedProvider = new ExchangeRateCurrencyProvider();
-    else cachedProvider = new MockCurrencyProvider();
+    if (env.FIXER_API_KEY && env.EXCHANGERATE_API_KEY) {
+      cachedProvider = new ResilientCurrencyProvider(
+        new FixerCurrencyProvider(),
+        new ExchangeRateCurrencyProvider(),
+      );
+    } else if (env.FIXER_API_KEY) {
+      cachedProvider = new ResilientCurrencyProvider(new FixerCurrencyProvider());
+    } else if (env.EXCHANGERATE_API_KEY) {
+      cachedProvider = new ResilientCurrencyProvider(new ExchangeRateCurrencyProvider());
+    } else {
+      cachedProvider = new MockCurrencyProvider();
+    }
   }
   return cachedProvider;
 }

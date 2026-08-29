@@ -2,6 +2,7 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import { ProviderError } from "@/shared/errors";
 import { type ExternalProvider, fetchJson } from "@/integrations/types";
+import { withResilience } from "@/infrastructure/resilience";
 
 /**
  * Normalized shape every caller works with. Field names verified against
@@ -118,13 +119,38 @@ export class MockWeatherProvider implements WeatherProvider {
   }
 }
 
+// --- Resilient wrapper -----------------------------------------------
+//
+// Weather changes more slowly than flight status — a 10-minute fresh
+// window is generous without going stale in a way that matters for trip
+// planning. Degraded-mode data is kept for up to 3 hours past that.
+
+class ResilientWeatherProvider implements WeatherProvider {
+  readonly providerName: string;
+
+  constructor(private readonly inner: WeatherProvider) {
+    this.providerName = inner.providerName;
+  }
+
+  async getCurrentWeather(query: string): Promise<NormalizedWeather> {
+    const result = await withResilience({
+      providerName: this.inner.providerName,
+      fetchFn: () => this.inner.getCurrentWeather(query),
+      cacheKey: `resilience:weather:${query}`,
+      freshTtlMs: 10 * 60_000,
+      staleTtlMs: 3 * 60 * 60_000,
+    });
+    return result.data;
+  }
+}
+
 // --- Factory -----------------------------------------------------------
 
 let cachedProvider: WeatherProvider | null = null;
 
 export function getWeatherProvider(): WeatherProvider {
   cachedProvider ??= env.WEATHERSTACK_API_KEY
-    ? new WeatherstackProvider()
+    ? new ResilientWeatherProvider(new WeatherstackProvider())
     : new MockWeatherProvider();
   return cachedProvider;
 }

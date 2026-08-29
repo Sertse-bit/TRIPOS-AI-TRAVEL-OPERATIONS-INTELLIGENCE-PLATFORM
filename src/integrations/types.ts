@@ -11,28 +11,43 @@ export interface ExternalProvider {
   readonly providerName: string;
 }
 
+const DEFAULT_TIMEOUT_MS = 10_000;
+
 /**
  * Shared fetch wrapper for real adapters. Does exactly one job: turn a
- * non-2xx or network-level failure into a ProviderError carrying the
- * provider's name, so every adapter fails the same documented way.
+ * non-2xx, network-level, or timeout failure into a ProviderError
+ * carrying the provider's name, so every adapter fails the same
+ * documented way.
  *
- * Deliberately NOT doing retry/backoff/circuit-breaking here — that's
- * general resilience machinery that wraps *any* provider call uniformly,
- * and belongs to Phase 6, not to this abstraction layer. This function
- * makes exactly one HTTP attempt.
+ * Deliberately NOT doing retry/backoff/circuit-breaking/caching here —
+ * that's orchestration across *multiple* attempts and belongs to
+ * infrastructure/resilience.ts (Phase 6), not this per-request helper.
+ * This function makes exactly one HTTP attempt, bounded by a timeout.
  */
 export async function fetchJson(
   providerName: string,
   url: string,
   init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<unknown> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await fetch(url, { ...init, signal: controller.signal });
   } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new ProviderError(
+        providerName,
+        `${providerName} request timed out after ${timeoutMs}ms.`,
+      );
+    }
     throw new ProviderError(providerName, `Network request to ${providerName} failed.`, {
       cause: cause instanceof Error ? cause.message : String(cause),
     });
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {

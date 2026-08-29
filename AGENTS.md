@@ -22,6 +22,15 @@ boundaries, the AI tool layer, or auth.
   so the success/error envelope and request ID stay consistent everywhere.
 - Real secrets live in `.env.local` only, which is git-ignored. Only
   `.env.example` (names, no values) is committed.
+- **Raw SQL against enum columns needs an explicit cast**, e.g.
+  `'DEGRADED'::"ApiHealthStatus"`. Postgres's type inference can fail
+  silently at the SQL-string level (never caught by TypeScript) when an
+  unquoted-type string literal appears inside a `CASE` expression or
+  alongside `ON CONFLICT ... DO UPDATE` — found the hard way in
+  `api-health-repository.ts` (Phase 6) via a real Postgres test failure,
+  not by inspection. Every future repository touching an enum column
+  (Trip, Flight, Document, Risk, Recommendation all have one) should cast
+  explicitly from the start rather than rediscover this.
 
 ## Commands
 

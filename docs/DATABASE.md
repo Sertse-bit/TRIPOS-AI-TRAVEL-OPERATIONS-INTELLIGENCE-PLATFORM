@@ -187,6 +187,16 @@ hold anything real. Tracked as a Phase 4 (Security Foundation) item.
 
 ## Known gaps (honest, not hidden)
 
+- **Raw SQL against enum columns needs an explicit cast** (e.g.
+  `'DEGRADED'::"ApiHealthStatus"`) — Postgres's type inference can fail on
+  an unquoted-type string literal inside a `CASE` expression combined with
+  `ON CONFLICT ... DO UPDATE`. Found via a real Postgres test failure in
+  Phase 6 (`api-health-repository.ts`), not by inspection — see
+  `docs/INTEGRATIONS.md`'s resilience section for the full story. Every
+  future repository touching an enum column (Trip, Flight, Document,
+  Risk, Recommendation all have one) should cast explicitly from the
+  start.
+
 - No DB-level `CHECK` constraint on `risk_score` (0–100) or `confidence`
   (0.00–1.00) yet — validated at the application layer only so far.
   Worth adding as a `CHECK` constraint when Phase 16 firms up the exact

@@ -430,7 +430,84 @@ fallback on call failure — that composition is explicitly Phase 6's job.
 
 ## Phase 6 — API Resilience
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `infrastructure/circuit-breaker.ts` — in-memory three-state machine
+  (CLOSED/OPEN/HALF_OPEN) per provider, deliberately not Redis-backed
+  (single-instance app; no evidence a multi-instance deployment is
+  needed yet).
+- `infrastructure/resilience.ts` — the orchestrator implementing
+  `docs/ARCHITECTURE.md`'s exact flow: cache check → provider call with
+  retry+backoff (only on retryable errors — 5xx/429/network, never a
+  4xx like a bad key) → fallback provider → degraded mode via stale
+  cache → clear `ProviderError` if nothing is left. Every result reports
+  its source (`cache`/`live`/`fallback`/`degraded-cache`) and staleness —
+  this is where Phase 17's confidence scoring will get its provenance.
+- `integrations/types.ts`'s `fetchJson` gained a timeout (`AbortController`,
+  10s default) — a per-request concern distinct from the multi-attempt
+  orchestration above it.
+- Wired transparently into Aviation, Weather, and Currency's factory
+  functions — callers still just call `.getFlightStatus()` etc.
+  normally; resilience is invisible to them. Mock adapters stay
+  unwrapped (no real failure mode to be resilient against).
+- **Currency's real fallback, deliberately deferred from Phase 5, now
+  exists**: when both `FIXER_API_KEY` and `EXCHANGERATE_API_KEY` are
+  configured, a genuine primary→fallback composition runs.
+- `modules/observability/api-health-repository.ts` — every provider
+  attempt now updates Phase 3's previously-unused `api_health` table
+  (DEGRADED at 1–2 consecutive failures, DOWN at 3+, OPERATIONAL on
+  success), giving Phase 23's observability panel real data instead of
+  invented metrics.
+
+**Two real bugs found by testing against real infrastructure, not by inspection:**
+
+1. `api_health`'s upsert query wrote unquoted enum string literals inside
+   a `CASE` + `ON CONFLICT` combination — Postgres's type inference
+   failed (`column "status" is of type "ApiHealthStatus" but expression
+is of type text`), a runtime SQL error TypeScript could never catch.
+   Found via a dedicated test against real Postgres, fixed with explicit
+   `::"ApiHealthStatus"` casts. Noted in `AGENTS.md` since every future
+   phase writing to an enum column will face the same risk.
+2. During manual verification of the live currency fallback, a call hung
+   far past its expected duration. Root cause: Redis was unreachable
+   (background services don't persist between tool invocations in this
+   sandbox), and `ioredis`'s default reconnect behavior doesn't fail fast
+   against a genuinely unreachable server — which would have quietly
+   undermined `resilience.ts`'s "cache failures are non-fatal" design
+   intent in any environment, not just this sandbox. Fixed with an
+   explicit `connectTimeout` + capped `retryStrategy` on the shared Redis
+   client, verified with a dedicated test against a deliberately
+   unreachable address (600ms now, was 30+ seconds).
+
+**Tests — all executed for real:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 81/81 passing (24 new: 8 circuit breaker covering the
+  full state machine including recovery and re-opening, 9 resilience
+  orchestrator covering cache/retry/non-retryable/fallback/degraded/
+  full-failure/circuit-integration, 5 api_health against real Postgres,
+  1 Redis connection-bounds against a genuinely unreachable address,
+  plus 1 new end-to-end fallback-composition test in currency's suite)
+- `pnpm build` → succeeded
+- **Live verification, not just mocked**: with real (sandbox-unreachable)
+  Fixer and ExchangeRate credentials configured, a real call through the
+  actual factory-produced provider correctly attempted Fixer, correctly
+  recognized the 403 as non-retryable (skipped wasting time on retries),
+  fell over to ExchangeRate, correctly did the same, and threw a clear
+  structured error — the entire chain completing in 170ms once Redis was
+  confirmed running.
+
+**Known limitations:** circuit breaker state is in-memory only (resets on
+process restart; acceptable for a single instance, would need Redis for
+a multi-instance deployment). `api_health` writes are fire-and-forget —
+an observability write failure never affects the actual response, by
+design, but also means it's possible (rare) for health data to lag
+reality by one request.
+
+**Next phase:** Phase 7 — Trip Digital Twin.
 
 ---
 

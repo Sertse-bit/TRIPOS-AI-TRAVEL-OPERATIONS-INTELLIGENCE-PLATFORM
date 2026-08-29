@@ -3,7 +3,11 @@ import {
   ExchangeRateCurrencyProvider,
   FixerCurrencyProvider,
   MockCurrencyProvider,
+  getCurrencyProvider,
+  resetCurrencyProviderCache,
 } from "@/integrations/currency/provider";
+import { redis } from "@/infrastructure/redis";
+import { resetAllCircuits } from "@/infrastructure/circuit-breaker";
 import { ProviderError } from "@/shared/errors";
 
 // Mirrors real Fixer/ExchangeRate Data API responses (both apilayer
@@ -76,5 +80,51 @@ describe("MockCurrencyProvider", () => {
     const provider = new MockCurrencyProvider();
     const result = await provider.getExchangeRate("ETB", "AED");
     expect(result.rate).toBe(1.0);
+  });
+});
+
+describe("getCurrencyProvider() resilient fallback composition (end to end)", () => {
+  const cacheKey = "resilience:currency:ETB:AED";
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    resetCurrencyProviderCache();
+    resetAllCircuits();
+    await redis.del(cacheKey);
+  });
+
+  it("falls over from Fixer to ExchangeRate when Fixer's real calls genuinely fail", async () => {
+    // Both AVIATIONSTACK-style env keys are already set in vitest.setup.ts
+    // for FIXER_API_KEY and EXCHANGERATE_API_KEY, so getCurrencyProvider()
+    // selects the dual-vendor ResilientCurrencyProvider path.
+    let callCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string) => {
+        callCount++;
+        if (url.includes("/fixer/")) {
+          return { ok: false, status: 503, json: async () => ({}) };
+        }
+        // exchangerates_data (the fallback vendor) succeeds
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            timestamp: 1789050000,
+            base: "ETB",
+            rates: { AED: 0.0218 },
+          }),
+        };
+      }),
+    );
+
+    const provider = getCurrencyProvider();
+    // maxRetries defaults to 2 inside withResilience, so Fixer will be
+    // attempted 3 times before falling over -- this is the real,
+    // unmodified default the factory wires up, not a test-only shortcut.
+    const result = await provider.getExchangeRate("ETB", "AED");
+
+    expect(result.rate).toBe(0.0218);
+    expect(callCount).toBeGreaterThan(1); // proves Fixer really was tried before falling over
   });
 });

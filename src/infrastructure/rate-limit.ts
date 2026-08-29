@@ -1,5 +1,4 @@
-import Redis from "ioredis";
-import { env } from "@/config/env";
+import { redis } from "@/infrastructure/redis";
 import { RateLimitedError } from "@/shared/errors";
 
 /**
@@ -12,14 +11,6 @@ import { RateLimitedError } from "@/shared/errors";
  * window only if evidence says this matters (brief's own "optimize only
  * where evidence supports it").
  */
-export const redis = new Redis(env.REDIS_URL, {
-  maxRetriesPerRequest: 2,
-  lazyConnect: false,
-});
-
-redis.on("error", (err) => {
-  console.error("Redis connection error", err);
-});
 
 interface RateLimitOptions {
   /** Identifies the limited resource, e.g. "login" or "register". */
