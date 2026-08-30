@@ -513,7 +513,66 @@ reality by one request.
 
 ## Phase 7 — Trip Digital Twin
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- Six repositories (`trip`, `traveler`, `destination`, `flight`,
+  `document`, `trip-event`, plus `weather-snapshot` and
+  `currency-snapshot`) — raw `pg`, same interim approach as auth/
+  api-health given Prisma Client can't be generated in this sandbox.
+  Enum columns cast explicitly this time (`'PLANNING'::"TripStatus"`)
+  from the start, applying the Phase 6 lesson rather than rediscovering it.
+- `modules/trip/trip-service.ts` — the actual domain service, covering
+  every operation the brief lists: creating trip, updating trip, adding
+  destinations, adding flights, attaching documents, changing trip
+  state, recording snapshots, calculating operational state.
+- **Closes the resource-ownership authorization gap deliberately left
+  open in Phase 4**: `requireOwnedTrip()` throws the _identical_
+  `NotFoundError` whether a trip doesn't exist or belongs to someone
+  else — verified live, not just reasoned about (see below).
+- Immutable event history: every mutating operation writes a
+  `trip_events` row via `recordTripEvent()`. Direct user actions get a
+  fresh-UUID dedupe key (no natural retry-duplication risk, unlike the
+  snapshot-comparison events Phase 9's idempotency design already covers).
+- `calculateOperationalState()` — deliberately simple, deterministic,
+  real-data-only (INCOMPLETE/ON_TRACK/ATTENTION_NEEDED/DISRUPTED based on
+  the latest flight snapshot per flight). Explicitly the precursor to
+  Phase 16's weighted risk score, not a preview of it.
+- `getTripDigitalTwin()` — the full assembled view. Documents/risk/
+  recommendations are genuinely empty right now (no write path exists
+  until Phase 14/16/17), not stubbed with fake data.
+- 8 API routes: `POST/GET /api/trips`, `GET/PATCH /api/trips/[id]`, plus
+  `travelers`, `destinations`, `flights`, `status`, `events`,
+  `operational-state` sub-routes.
+- Extended `withApiHandler` again — this time for Next.js's route
+  `context` (dynamic segment params), needed the moment a route had a
+  `[id]` segment. Verified against Next's own route-type validator (not
+  just `tsc`) for both dynamic and static routes together.
+
+**Tests — all executed for real, against real Postgres:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 97/97 passing (16 new: full CRUD, both authorization
+  cases — genuine not-found and cross-user access both resolving to the
+  same `NotFoundError` — and all four operational-state branches,
+  including one proving the calculation reads the _latest_ snapshot, not
+  just any row, by inserting an old good one and a new bad one)
+- `pnpm build` → succeeded, all 8 new routes registered correctly
+- **Full live 11-step curl flow**: two real users registered, one
+  creates a trip → operational state genuinely `INCOMPLETE` → destination
+  and flight added → state genuinely flips to `ON_TRACK` → the second
+  user's attempts to view or modify the first user's trip both return
+  **404, not 403** → owner's full digital twin and event history both
+  correct, event log in the right order. Test data and processes cleaned
+  up afterward.
+
+**Known limitations:** no trip-status transition validation yet (e.g.
+nothing stops `CANCELLED` → `ACTIVE`) — noted as a real gap in
+`trip-service.ts` rather than silently assumed correct.
+
+**Next phase:** Phase 8 — AI Tool Layer.
 
 ---
 

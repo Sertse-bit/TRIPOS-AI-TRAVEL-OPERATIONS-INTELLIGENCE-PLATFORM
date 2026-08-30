@@ -434,3 +434,40 @@ decided here, on purpose:
 - Docker service resource limits → Phase 30
 
 ---
+
+## 15. Trip Digital Twin (Phase 7)
+
+The concept sketched in Section 7's diagram is now a real domain service
+(`src/modules/trip/trip-service.ts`), not just a database row:
+
+```text
+Trip
+├── Travelers        addTravelerToTrip()
+├── Destinations     addDestinationToTrip()
+├── Flights          addFlightToTrip()          (scheduled info only —
+│                                                 live status is Phase 10)
+├── Documents        attachDocumentToTrip()     (relationship only —
+│                                                 the pipeline is Phase 14)
+├── Weather snapshots  recordWeatherSnapshot()  (storage only — fetching
+├── Currency snapshots recordCurrencySnapshot()  is Phase 11/12)
+├── Events           recordTripEvent() — immutable, every operation above writes one
+├── Risks / Recommendations   genuinely empty — no write path exists until Phase 16/17
+└── Operational state  calculateOperationalState() — deterministic, real data only
+```
+
+**Closes a gap deliberately left open in Phase 4**: `docs/SECURITY.md`
+noted "resource-level (row) authorization... deliberately not built yet."
+Every mutating trip operation now calls `requireOwnedTrip()`, which
+resolves ownership and throws the identical `NotFoundError` whether the
+trip doesn't exist or belongs to someone else — verified live: a
+non-owner gets `404`, not `403`, so a trip ID can't be used as an
+enumeration oracle to learn which IDs are valid.
+
+**Operational state is deliberately simple** — INCOMPLETE (nothing set up
+yet) / ON_TRACK / ATTENTION_NEEDED (a flight's latest snapshot is
+DELAYED) / DISRUPTED (CANCELLED or DIVERTED) — derived only from data
+that genuinely exists right now. This is not a preview of Phase 16's
+weighted deterministic risk score; it's the simpler precursor Phase 16
+extends, not replaces.
+
+---
