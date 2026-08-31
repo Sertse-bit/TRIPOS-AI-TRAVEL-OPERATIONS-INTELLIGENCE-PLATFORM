@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ExchangeRateCurrencyProvider,
   FixerCurrencyProvider,
@@ -85,6 +85,17 @@ describe("MockCurrencyProvider", () => {
 
 describe("getCurrencyProvider() resilient fallback composition (end to end)", () => {
   const cacheKey = "resilience:currency:ETB:AED";
+
+  beforeEach(async () => {
+    // Not just afterEach: if any previous run's cleanup ever failed to
+    // execute (a transient Redis hiccup, or — as actually happened once
+    // during this build — leftover state from an earlier successful run
+    // that outlived a single afterEach), a stale cached rate could
+    // silently satisfy this test without genuinely exercising the
+    // fallback path. Cleaning up before, too, makes this self-healing
+    // regardless of what happened last time.
+    await redis.del(cacheKey);
+  });
 
   afterEach(async () => {
     vi.unstubAllGlobals();

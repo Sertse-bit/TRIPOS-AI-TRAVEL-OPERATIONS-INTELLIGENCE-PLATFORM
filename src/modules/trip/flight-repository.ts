@@ -72,6 +72,15 @@ export async function findFlightsByTripId(tripId: string): Promise<FlightRecordR
   return result.rows.map(mapRow);
 }
 
+export async function findFlightById(id: string): Promise<FlightRecordRow | null> {
+  const result = await pool.query(
+    `SELECT id, trip_id, flight_number, airline, departure_airport, arrival_airport, scheduled_departure, scheduled_arrival, created_at
+     FROM flight_records WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0] ? mapRow(result.rows[0]) : null;
+}
+
 /**
  * The most recent status snapshot per flight, if any exist yet. Returns
  * null for a flight with no snapshots -- expected and normal until

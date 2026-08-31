@@ -78,3 +78,12 @@ export async function findDestinationsByTripId(tripId: string): Promise<Destinat
   );
   return result.rows.map(mapRow);
 }
+
+export async function findDestinationById(id: string): Promise<DestinationRecord | null> {
+  const result = await pool.query(
+    `SELECT id, trip_id, city, country, latitude, longitude, arrival_date, departure_date, order_index, created_at
+     FROM destinations WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0] ? mapRow(result.rows[0]) : null;
+}

@@ -578,7 +578,78 @@ nothing stops `CANCELLED` → `ACTIVE`) — noted as a real gap in
 
 ## Phase 8 — AI Tool Layer
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `src/ai/tools/types.ts` — the `ToolDefinition`/`ToolContext`/`ToolResult`
+  contracts. `ToolContext.userId` is injected from the authenticated
+  session; it is never part of a tool's LLM-facing input schema — the
+  actual mechanism that keeps a prompt injection or model confusion from
+  ever reaching another user's data, regardless of what `tripId` a tool
+  call specifies.
+- All 10 tools named in the brief: `get_trip`, `get_trip_documents`,
+  `get_flight_status`, `get_weather`, `get_currency_rate`,
+  `search_destination`, `search_trip_knowledge`, `calculate_budget`,
+  `create_recommendation`, `create_alert`. Every one: typed input (Zod),
+  validated, trip-ownership-authorized, structured output, logged.
+- `src/ai/tools/registry.ts` — `TOOL_REGISTRY` is the actual enforcement
+  point for "the AI layer should interact only with approved tools": no
+  code path can execute a tool by name unless it's a key in that map.
+  `callTool()` is the single execution path: registry check → schema
+  validation → execute → structured `ToolResult` either way, never a
+  thrown exception.
+- Two new repositories the write-tools needed:
+  `recommendation-repository.ts` (Phase 3's table, no write path until
+  now) and `notification-repository.ts` (same).
+- `docs/AI_ARCHITECTURE.md` — the security model, the full execution
+  path, and an honest per-tool scope table (e.g. `calculate_budget` is a
+  currency conversion, not a full trip cost estimate; `search_trip_knowledge`
+  honestly reports "not yet processed" rather than fabricating a match,
+  since Phase 15's embedding pipeline doesn't exist yet).
+
+**A real TypeScript variance issue, resolved properly, not worked around:**
+`ToolDefinition<TInput, TOutput>`'s `execute` method makes it
+contravariant in `TInput` — a heterogeneous registry needs the opposite
+variance from what a naive `Record<string, ToolDefinition<unknown, unknown>>`
+provides. Fixed by defaulting `TInput`/`TOutput` to `any` at the storage
+boundary (the standard pattern for this; real safety comes from each
+tool's own `inputSchema.safeParse()` at execution time, not the stored
+type) plus an explicit type annotation at the registry lookup site to
+avoid TypeScript computing an impossible intersection type across all 10
+tools' differing parameter shapes. Both `any` usages are narrowly scoped
+and explained inline, with a targeted (not blanket) eslint-disable.
+
+**A real test-hygiene bug found and fixed:** the Phase 6 currency
+fallback end-to-end test only cleaned up its Redis cache key in
+`afterEach`. A stale cached rate from an earlier successful run was
+found still present (confirmed directly via `redis-cli get`/`ttl` before
+fixing) and had been silently letting that test pass via a cache hit
+without genuinely exercising the fallback path. Fixed by adding
+`beforeEach` cleanup too, making the test self-healing regardless of
+what happened in any previous run — `resilience.test.ts` already had
+this pattern from the start; this test just hadn't been given the same
+discipline when it was added later.
+
+**Tests — all executed for real, against real Postgres:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 111/111 passing (14 new tool-registry tests: the
+  approved-tools-only boundary, structured-error-not-exception input
+  validation, authorization enforced against the injected `userId`
+  across two real users for both a read tool and the write tools —
+  including confirming `create_alert` cannot be used to notify anyone
+  but the trip's real owner — and successful calls with genuine side
+  effects checked directly against Postgres)
+- `pnpm build` → succeeded (no new routes yet — tools are consumed by an
+  orchestrator, Phase 9, not exposed directly, which is correct)
+
+**Known limitations:** no per-run execution limits yet (max tool calls,
+wall-clock budget, no agent-to-agent recursion) — deliberately Phase 9's
+job, not this layer's; see `docs/AI_ARCHITECTURE.md`.
+
+**Next phase:** Phase 9 — AI Orchestrator.
 
 ---
 

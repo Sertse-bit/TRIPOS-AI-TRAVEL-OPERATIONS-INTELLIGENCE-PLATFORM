@@ -373,3 +373,11 @@ export async function getTripEventHistory(
   await requireOwnedTrip(tripId, userId);
   return findEventsByTripId(tripId);
 }
+
+export async function getTripDocuments(
+  tripId: string,
+  userId: string,
+): Promise<TripDocumentRecord[]> {
+  await requireOwnedTrip(tripId, userId);
+  return findDocumentsByTripId(tripId);
+}
