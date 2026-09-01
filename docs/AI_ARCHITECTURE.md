@@ -1,9 +1,9 @@
 # TripOS — AI Architecture
 
-## Status: Phase 8 (AI Tool Layer) Complete
+## Status: Phase 9 (AI Orchestrator) Complete
 
-This document covers the AI tool layer. It will grow with Phase 9
-(Orchestrator) and the specialized agents (Phases 10–13, 16–17, 20).
+This document covers the AI tool layer and orchestrator. It will grow
+further with the specialized agents (Phases 10–13, 16–17, 20).
 
 ## The core security principle
 
@@ -94,3 +94,80 @@ agent-to-agent recursion — already specified in `docs/ARCHITECTURE.md`
 Section 10) are the **orchestrator's** job, not each tool's. This layer
 defines what a tool is allowed to do and to whom; Phase 9 decides how
 many times a model gets to call them in one run.
+
+## The Orchestrator (Phase 9)
+
+`src/ai/orchestrator.ts`'s `runAgent()` is the actual mechanism that runs
+one `AgentDefinition` (`src/ai/agents/types.ts`) through a real Claude
+tool-use loop. The 7 specialized agents the brief names are Phases
+10–13/16–17/20's job to define using this framework — this phase built
+the loop and the hard limits, plus a minimal test-fixture agent to prove
+the mechanism itself works, not the specialized agents' domain logic.
+
+### The loop
+
+```text
+runAgent(agent, userMessage, toolContext, limits?)
+  │
+  ├─ build Anthropic tool schemas for agent.allowedTools (Zod → JSON
+  │  Schema via z.toJSONSchema()) plus one more: provide_final_answer,
+  │  whose schema is agent.outputSchema
+  │
+  loop:
+    ├─ elapsed > maxWallClockMs? ──▶ { success: false, reason: TIMEOUT }
+    ├─ tokensUsed > maxTokenBudget? ──▶ { success: false, reason: TOKEN_BUDGET_EXCEEDED }
+    ├─ call the real Anthropic API (or return API_ERROR if the call itself fails)
+    ├─ no tool_use in the response? ──▶ { success: false, reason: MODEL_STOPPED_WITHOUT_ANSWER }
+    └─ for each tool_use block:
+          ├─ name === provide_final_answer?
+          │     ├─ validates against agent.outputSchema? ──▶ { success: true, data }
+          │     └─ invalid? feed the validation issue back as an error
+          │         tool_result, giving the model one more turn to correct
+          │         itself within the remaining budget — not an immediate failure
+          └─ otherwise: toolCallsUsed++; > maxToolCalls? ──▶ { success: false,
+              reason: MAX_TOOL_CALLS_EXCEEDED }
+              : execute via ai/tools/registry.ts's callTool() (Phase 8),
+                feed the real structured result (success or failure) back
+                as a tool_result
+```
+
+Defaults match what `docs/ARCHITECTURE.md` Section 10 already specified
+back in Phase 1 (8 tool calls, 30s wall-clock) — honored rather than
+reinvented — plus a 50,000-token cumulative budget added now that "token
+usage where applicable" needed a concrete number. All three are
+injectable per call (not hardcoded constants used directly), specifically
+so tests can exercise the timeout/budget paths in milliseconds instead of
+waiting out the real 30-second limit; the production defaults are
+unchanged either way.
+
+**No agent-to-agent recursion is possible by construction, not merely
+disallowed by convention**: the only thing a tool-use block can trigger
+is a call to `callTool()`, and `callTool()` can only execute a registered
+_tool_ (Phase 8) — there is no code path anywhere that invokes another
+agent from inside a running one.
+
+### A tool failure is data, not a crash
+
+When `callTool()` returns `{success: false, ...}` (e.g. a genuinely
+nonexistent trip ID), that structured result is serialized straight into
+the tool_result sent back to the model, marked `is_error: true`. The
+model sees a real, specific error and can react to it — apologize, ask
+for clarification, try a different approach — rather than the whole
+agent run crashing. Verified with a real failure, not a mocked one: a
+test deliberately requests `get_trip` with a nonexistent ID, confirms
+the genuine `NOT_FOUND` error reached the second message sent to the
+model, and the run still completes successfully once the model
+acknowledges it.
+
+### Verification status
+
+Like every other external provider in this build, there's no real
+`ANTHROPIC_API_KEY` available in this sandbox to test a genuine live
+call against. Unlike the travel provider domains, `api.anthropic.com`
+_is_ actually reachable from this sandbox's network allowlist — the gap
+here is a credential, not a network restriction. Every test mocks only
+the Anthropic API boundary (`@anthropic-ai/sdk`'s `messages.create`);
+everything downstream — the tool registry, trip ownership checks, and
+Postgres — is genuinely real. Live end-to-end verification (confirming
+the actual Anthropic API responds to these exact tool schemas the way
+the mocked tests assume) needs a real key.

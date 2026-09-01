@@ -44,6 +44,19 @@ export function getAllToolDefinitions(): ToolDefinition[] {
 }
 
 /**
+ * Looks up one tool's definition (description + inputSchema) by name --
+ * used by the orchestrator (Phase 9) to build the Anthropic tool schema
+ * for exactly the subset of tools a given agent is allowed to use.
+ * Throws rather than returning undefined: a caller asking for a tool
+ * name that isn't registered is a real bug (e.g. a typo in an agent's
+ * allowedTools list) that should surface immediately, not silently
+ * produce a broken/missing tool schema sent to the model.
+ */
+export function getToolDefinition(name: ToolName): ToolDefinition {
+  return TOOL_REGISTRY[name];
+}
+
+/**
  * The single execution path every tool call goes through: reject
  * anything not in the registry, validate input against that tool's own
  * schema, execute with the caller-supplied (never LLM-supplied) context,

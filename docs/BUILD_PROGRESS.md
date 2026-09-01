@@ -655,7 +655,82 @@ job, not this layer's; see `docs/AI_ARCHITECTURE.md`.
 
 ## Phase 9 — AI Orchestrator
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `src/ai/agents/types.ts` — `AgentDefinition` (role, allowed tools
+  subset, structured output schema) and `defineAgent()`. The 7
+  specialized agents the brief names are Phases 10–13/16–17/20's job to
+  define using this framework; this phase built the framework and the
+  loop that runs any agent defined with it.
+- `src/ai/orchestrator.ts`'s `runAgent()` — a real Claude tool-use loop
+  against the actual `@anthropic-ai/sdk`. Converts each allowed tool's
+  Zod schema to a JSON Schema via Zod 4's native `z.toJSONSchema()`, adds
+  a `provide_final_answer` pseudo-tool matching the agent's output
+  schema, and loops until the model calls it (validated), or a hard
+  limit trips.
+- Hard limits, all three actually enforced and tested: max tool calls
+  (default 8, matching Phase 1's `docs/ARCHITECTURE.md` Section 10 —
+  honored, not reinvented), wall-clock timeout (default 30s), and a new
+  cumulative token budget (default 50,000) for "token usage where
+  applicable." All three injectable per call so tests exercise the
+  timeout/budget paths in milliseconds rather than waiting out the real
+  default.
+- **No agent-to-agent recursion is possible by construction**: a
+  tool-use block can only trigger `callTool()` (Phase 8), which can only
+  execute a registered tool, never another agent — there's no code path
+  for it, not just a documented rule against it.
+- Invalid structured output gets one corrective retry (fed back as a
+  validation-error tool result) within the existing tool-call budget,
+  rather than failing the whole run on one malformed attempt.
+- Added `getToolDefinition()` to the Phase 8 registry — a proper lookup
+  the orchestrator needed to build per-agent tool schemas.
+
+**Two real bugs found and fixed by testing, not by inspection:**
+
+1. Two generic Zod-4 type-inference gaps (`defineAgent`, mirroring the
+   identical `defineTool` issue from Phase 8) — same already-justified
+   fix pattern (a narrow, explained type assertion) applied rather than
+   re-derived, since it's the same root cause.
+2. **The actual orchestrator test suite initially failed 8 of 9 tests**
+   with a misleading `API_ERROR` on every one. Root cause: the Anthropic
+   SDK mock used `vi.fn().mockImplementation(() => ({...}))` — an arrow
+   function — for a class the code calls with `new Anthropic(...)`.
+   Arrow functions have no `[[Construct]]` behavior in JavaScript and
+   cannot be invoked with `new`, so every single call was silently
+   throwing "is not a constructor," caught by the orchestrator's own
+   error handling and reported as `API_ERROR` — which is _also_ the
+   correct expected outcome for one specific test, which is exactly why
+   it was the only one passing and why the pattern looked confusing
+   rather than uniform. Diagnosed with an isolated minimal reproduction
+   file (not by guessing at fixes) before fixing with a real `function`.
+
+**Tests — all executed for real, mocking only the Anthropic API boundary:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 120/120 passing (9 new orchestrator tests: success with
+  no tools needed, success with a real tool call whose real result is
+  proven to reach the model's next turn, a _genuine_ tool failure —
+  nonexistent trip ID — proven to reach the model as a real `NOT_FOUND`
+  error rather than crashing the run, structured-output validation
+  retry, all three hard limits tripped with real (small, injected)
+  timing, and both `API_ERROR` and `MODEL_STOPPED_WITHOUT_ANSWER`
+  handled without throwing)
+- `pnpm build` → succeeded. No new routes — an orchestrator without an
+  agent to call is infrastructure, not yet a feature; that wiring
+  belongs to whichever phase first needs to expose it (likely Phase 21's
+  command bar or the first specialized agent, whichever lands first).
+
+**Known limitations:** no real `ANTHROPIC_API_KEY` available in this
+sandbox — unlike the travel provider domains, `api.anthropic.com` is
+actually reachable here, so the gap is a credential, not a network
+restriction. Every test mocks the Anthropic API boundary only; the tool
+registry, authorization, and Postgres underneath are genuinely real.
+Live end-to-end verification needs a real key.
+
+**Next phase:** Phase 10 — Flight Agent.
 
 ---
 
