@@ -171,3 +171,70 @@ everything downstream — the tool registry, trip ownership checks, and
 Postgres — is genuinely real. Live end-to-end verification (confirming
 the actual Anthropic API responds to these exact tool schemas the way
 the mocked tests assume) needs a real key.
+
+## The Flight Agent (Phase 10)
+
+`src/ai/agents/flight-agent.ts` is deliberately **not** an
+`AgentDefinition` run through Phase 9's orchestrator. Re-reading this
+phase's actual responsibilities — retrieve, normalize, determine state,
+compare against the previous snapshot, emit an event on meaningful
+change — none of it is a reasoning or generation task. Routing it
+through an LLM would be exactly what the brief's Section 37 warns
+against directly: "use AI where deterministic logic is better." (Phase
+16's Risk Engine is the deliberate counter-example: a deterministic
+score with an AI explanation layered on top. This agent has no such
+layer because nothing here benefits from one.)
+
+### The status vocabulary mismatch, made explicit
+
+Aviationstack's normalized status (`scheduled/active/landed/cancelled/
+incident/diverted/unknown`, from Phase 5) does not line up one-to-one
+with this domain's `FlightStatus` enum (`UNKNOWN/SCHEDULED/DELAYED/
+CANCELLED/LANDED/COMPLETED`, fixed at the database level since Phase 3).
+`mapProviderStatusToFlightStatus()` is the explicit reconciliation:
+
+- **DELAYED is derived from delay minutes, not the raw status string** —
+  a flight can be `"active"` (airborne) and still be meaningfully
+  delayed. A 15-minute threshold (matching common on-time-performance
+  conventions) avoids flagging a two-minute variance as a disruption.
+- `"incident"` and `"diverted"` both map to `CANCELLED` — neither has its
+  own slot in this domain's enum, and both represent the same
+  operational signal a traveler actually needs: the flight isn't
+  proceeding as planned.
+- `COMPLETED` is not derived from provider data at all — Aviationstack
+  has no signal for "landed, deplaned, and fully done" beyond `"landed"`
+  itself. Left for a later phase if that distinction ever matters.
+
+### Two-layer design
+
+`processFlightStatusUpdate(flightRecordId)` is the pure domain
+operation — no `userId`, no authorization — because Phase 19's Trip
+Watch will call this directly while iterating over every monitored
+flight across every trip, not on behalf of one user's request.
+`runFlightAgentForUser(tripId, flightRecordId, userId)` wraps it with the
+Phase 7 ownership check for the case that exists right now: a
+user-triggered manual check (`POST /api/trips/[id]/flights/[flightId]/
+check-status`).
+
+### Never invents flight data
+
+If the provider returns no matching flight at all (as opposed to
+failing), the agent records `UNKNOWN` rather than skipping the check
+silently — "we checked and found nothing" is itself meaningful and
+belongs in the append-only history, not indistinguishable from "never
+checked." If the provider call fails outright, this throws (via the
+Phase 6 resilience layer) rather than fabricating a plausible-looking
+status — verified live, not just asserted: a real call against the real,
+sandbox-unreachable Aviationstack API returned a genuine 403,
+correctly classified as non-retryable, and surfaced as a clean
+`PROVIDER_ERROR` — the flight status was never invented to paper over
+the failure.
+
+### Idempotent event emission
+
+Only a genuinely different status from the previous snapshot emits a
+`FLIGHT_UPDATED` event — the brief's own distinction between "checked"
+and "meaningfully changed." The event's dedupe key ties to the exact
+snapshot that triggered it
+(`flight_updated:{flightRecordId}:{snapshotId}`, per Phase 1/3's
+idempotency design), so a retry of the same check can never double-emit.

@@ -736,7 +736,73 @@ Live end-to-end verification needs a real key.
 
 ## Phase 10 — Flight Agent
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- A key scope decision, made explicit: `src/ai/agents/flight-agent.ts`
+  is a plain deterministic TypeScript service, **not** an
+  `AgentDefinition` run through Phase 9's orchestrator. Every
+  responsibility the brief lists (retrieve, normalize, compare, emit) is
+  a data operation, not a reasoning task — routing it through an LLM
+  would be exactly the "use AI where deterministic logic is better"
+  mistake Section 37 warns against.
+- `mapProviderStatusToFlightStatus()` — the explicit, documented
+  reconciliation between Aviationstack's normalized vocabulary
+  (`scheduled/active/landed/cancelled/incident/diverted/unknown`) and
+  this domain's fixed `FlightStatus` enum, which don't line up
+  one-to-one. DELAYED is derived from delay minutes (15-minute
+  threshold), not the raw status string, since a flight can be
+  `"active"` and still meaningfully delayed.
+- Added the missing write side to `flight-repository.ts`
+  (`insertFlightStatusSnapshot`) — Phase 7 only built the read side,
+  deferring the insert to this phase as planned.
+- `processFlightStatusUpdate()` — the pure domain operation (no
+  `userId`), for Phase 19's Trip Watch to call directly later.
+  `runFlightAgentForUser()` wraps it with Phase 7's ownership check for
+  the user-triggered case that exists now.
+- `POST /api/trips/[id]/flights/[flightId]/check-status` — a route
+  exposing manual triggering, consistent with Phase 7's pattern of
+  pairing domain services with a route rather than leaving them
+  unreachable until a later phase needs them.
+- Never invents flight data: a provider miss records `UNKNOWN` (checked,
+  found nothing — not the same as never checked); a provider failure
+  throws rather than fabricating a plausible status.
+- Idempotent event emission: only a genuine status change emits
+  `FLIGHT_UPDATED`, with a dedupe key tied to the exact snapshot.
+
+**A real test-isolation bug found and fixed, same class as Phase 8's:**
+the Aviation provider's resilience cache (Phase 6) keys by flight
+number, not by test case. Multiple tests in this file reused "ET602" —
+one test's second check was genuinely served the first check's cached
+response and never reached its own new mock at all, failing the
+assertion outright. Worse, other tests in the same file were passing
+"by coincidence" (both scenarios happened to expect the same SCHEDULED
+result) without actually proving isolation. Fixed with `beforeEach`
+cache clearing for every flight number used in the file, not just a
+one-off patch on the test that visibly failed.
+
+**Tests — all executed for real, against real Postgres:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 131/131 passing (11 new: the status mapping function
+  across every branch including the "active-but-delayed" case, a
+  first-check baseline, confirmation that an unchanged follow-up check
+  emits no duplicate event, a genuine status change to DELAYED with the
+  correct dedupe key verified directly against the database, the
+  never-invent-data behavior on a provider miss, and authorization)
+- `pnpm build` → succeeded, new route registered
+- **Live end-to-end verification against the real, genuinely-blocked
+  Aviationstack API**: registered a real user, created a trip, added a
+  flight, triggered a real status check. The real network call returned
+  a genuine 403, correctly classified as non-retryable (`retryable:
+false` in the actual log output), correctly had no cache to degrade to
+  (first-ever check), and surfaced as a clean structured `502
+PROVIDER_ERROR` — never invented data, never crashed. Test data and
+  the server process cleaned up afterward.
+
+**Next phase:** Phase 11 — Weather Agent.
 
 ---
 

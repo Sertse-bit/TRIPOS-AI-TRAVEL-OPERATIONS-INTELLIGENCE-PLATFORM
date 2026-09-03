@@ -104,3 +104,57 @@ export async function findLatestSnapshotForFlight(
     fetchedAt: result.rows[0].fetched_at,
   };
 }
+
+export type FlightStatusValue =
+  "UNKNOWN" | "SCHEDULED" | "DELAYED" | "CANCELLED" | "LANDED" | "COMPLETED";
+
+export interface FlightStatusSnapshotRecord {
+  id: string;
+  flightRecordId: string;
+  status: FlightStatusValue;
+  actualDeparture: Date | null;
+  actualArrival: Date | null;
+  delayMinutes: number | null;
+  fetchedAt: Date;
+}
+
+/**
+ * Append-only by design (Phase 3/6): never updates a row in place. Every
+ * check inserts a new one, which is what makes comparing "this check"
+ * against "the previous check" (this agent's whole job) possible at all.
+ */
+export async function insertFlightStatusSnapshot(input: {
+  flightRecordId: string;
+  status: FlightStatusValue;
+  actualDeparture?: Date | null;
+  actualArrival?: Date | null;
+  delayMinutes?: number | null;
+  rawProviderResponse?: unknown;
+  fetchedAt: Date;
+}): Promise<FlightStatusSnapshotRecord> {
+  const result = await pool.query(
+    `INSERT INTO flight_status_snapshots
+       (flight_record_id, status, actual_departure, actual_arrival, delay_minutes, raw_provider_response, fetched_at)
+     VALUES ($1, $2::"FlightStatus", $3, $4, $5, $6, $7)
+     RETURNING id, flight_record_id, status, actual_departure, actual_arrival, delay_minutes, fetched_at`,
+    [
+      input.flightRecordId,
+      input.status,
+      input.actualDeparture ?? null,
+      input.actualArrival ?? null,
+      input.delayMinutes ?? null,
+      input.rawProviderResponse ? JSON.stringify(input.rawProviderResponse) : null,
+      input.fetchedAt,
+    ],
+  );
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    flightRecordId: row.flight_record_id,
+    status: row.status,
+    actualDeparture: row.actual_departure,
+    actualArrival: row.actual_arrival,
+    delayMinutes: row.delay_minutes,
+    fetchedAt: row.fetched_at,
+  };
+}
