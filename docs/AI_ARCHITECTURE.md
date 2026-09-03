@@ -238,3 +238,39 @@ and "meaningfully changed." The event's dedupe key ties to the exact
 snapshot that triggered it
 (`flight_updated:{flightRecordId}:{snapshotId}`, per Phase 1/3's
 idempotency design), so a retry of the same check can never double-emit.
+
+## The Weather Agent (Phase 11)
+
+`src/ai/agents/weather-agent.ts` follows the Flight Agent's shape —
+deterministic, no LLM anywhere in the file — for the same reason, stated
+even more directly for this phase: "Do not allow the LLM to invent
+numerical weather values." There is no LLM here to invent anything;
+every number in a `WeatherAgentResult` traces directly back to the
+provider response.
+
+### A deliberately different first-reading policy from the Flight Agent
+
+The Flight Agent treats any first-ever reading as "changed" (`null →
+SCHEDULED` is itself new, useful information — the flight's status was
+previously unknown). Weather doesn't have the same property: an
+unremarkable baseline reading ("22°C, sunny") isn't news the way a
+flight's first confirmed status is, so establishing it doesn't emit an
+event. A **severe** first reading does — `detectSignificantWeatherChange()`
+checks the current condition against a documented (explicitly
+non-exhaustive) list of severe-weather keywords regardless of whether
+there's a previous snapshot to compare against, and separately checks
+temperature (8°C), wind speed (20 kph), and precipitation-state deltas
+only when a previous reading actually exists. This asymmetry between the
+two agents is deliberate, not an inconsistency — see
+`docs/BUILD_PROGRESS.md`'s Phase 11 entry for the full reasoning.
+
+### Never invents weather data
+
+Unlike the Aviation provider (which can return "no matching flight" as a
+distinct, non-error case), the Weather provider either succeeds or
+throws — there's no "no data" middle ground to represent. A provider
+failure propagates as a thrown `ProviderError`; nothing gets recorded in
+its place. Verified live: a real call against the real, sandbox-blocked
+Weatherstack API returned a genuine 403, correctly classified as
+non-retryable, and surfaced as a clean `PROVIDER_ERROR` with zero rows
+written to `weather_snapshots`.

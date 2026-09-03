@@ -808,7 +808,58 @@ PROVIDER_ERROR` — never invented data, never crashed. Test data and
 
 ## Phase 11 — Weather Agent
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `src/ai/agents/weather-agent.ts` — same deterministic family as the
+  Flight Agent, for the same reason, stated even more explicitly by this
+  phase: "Do not allow the LLM to invent numerical weather values."
+  There's no LLM in this file to invent anything.
+- `detectSignificantWeatherChange()` — a documented, deliberately
+  **different** first-reading policy from the Flight Agent's: an
+  unremarkable baseline reading ("22°C, sunny") emits no event, since
+  establishing it isn't itself news the way a flight's first confirmed
+  status is. A **severe** first reading (checked against a documented,
+  explicitly non-exhaustive keyword list) does emit one, regardless of
+  whether a previous snapshot exists. Genuine deltas from a real
+  previous reading — temperature (8°C), wind speed (20 kph),
+  precipitation starting/stopping — are checked the same way every time.
+  This asymmetry with the Flight Agent is a considered decision, not an
+  inconsistency: a flight's status genuinely has no "unremarkable
+  default" (UNKNOWN itself is informative), while ordinary weather does.
+- Two-layer design matching Phase 10: `processWeatherUpdate()` (pure,
+  for Phase 19's Trip Watch) and `runWeatherAgentForUser()` (Phase 7
+  ownership check, for the manual-trigger case that exists now).
+- `POST /api/trips/[id]/destinations/[destinationId]/check-weather`.
+- Never invents weather data: unlike Aviation (which can return "no
+  matching flight" as a distinct non-error case), the Weather provider
+  either succeeds or throws — a failure propagates as a thrown error;
+  nothing is recorded in its place.
+
+**Tests — all executed for real, against real Postgres:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 144/144 passing (13 new: every branch of significance
+  detection including the deliberate first-reading policy difference
+  from Phase 10, a baseline-with-no-event pipeline run, a severe-first-
+  reading pipeline run with the event's dedupe key verified against the
+  database, no-duplicate-event on an insignificant follow-up check, a
+  genuine provider failure confirmed to leave zero rows written rather
+  than fabricating data, and authorization). One transient
+  `ECONNREFUSED` mid-suite-run from this sandbox's established
+  service-persistence pattern (not a code issue) — resolved by
+  restarting Postgres and re-running; all 144 passed clean immediately after.
+- `pnpm build` → succeeded, new route registered
+- **Live end-to-end verification against the real, genuinely-blocked
+  Weatherstack API**: registered a user, created a trip, added a
+  destination, triggered a real weather check. The real network call
+  returned a genuine 403, correctly classified as non-retryable, had no
+  cache to degrade to, and surfaced as a clean structured `502
+PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
+
+**Next phase:** Phase 12 — Currency Agent.
 
 ---
 
