@@ -865,7 +865,63 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 ## Phase 12 — Currency Agent
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- A scope decision made explicit up front: the brief's own text for this
+  phase (retrieval, normalization, conversion, timestamped snapshots,
+  caching) omits "detect significant changes"/"compare against previous
+  snapshot," unlike Phases 10/11. Respected as a deliberate difference,
+  not an oversight — documented in `docs/AI_ARCHITECTURE.md` rather than
+  silently adding or silently omitting without comment.
+- `src/ai/agents/currency-agent.ts` — since retrieval, normalization,
+  caching, and the resilient dual-vendor fallback all already existed
+  end-to-end from Phase 5/6, what this phase actually added: a single
+  cohesive call (`getExchangeRateSnapshot`/`runCurrencyAgentForUser`)
+  that fetches the rate **and** records the timestamped snapshot
+  together, where previously those were two separate, unconnected calls.
+- `convertCurrencyAmount()` — extracted as a shared, tested utility,
+  replacing an inline duplicate multiplication in the `calculate_budget`
+  tool (Phase 8) so the rounding logic can't drift between the two.
+- **A real bug caught and fixed before it ever ran**: the first draft of
+  the pure domain function called trip-service's authorization-wrapped
+  `recordCurrencySnapshot` with a placeholder `"system"` userId — which
+  would always throw, since no trip is ever owned by a user literally
+  named that. Caught by re-reading the code against the Flight/Weather
+  agents' established pattern (their pure functions call the repository
+  layer directly, bypassing the authorization wrapper entirely) before
+  writing a single test, not discovered via a failing test afterward.
+  Fixed to match that pattern, and a second pass eliminated duplicated
+  fetch-and-record logic between the pure and user-facing functions —
+  the user-facing one now just checks ownership, then delegates.
+- Every snapshot is recorded with no significance gate, consistent with
+  this phase's lighter scope — two identical consecutive checks produce
+  two rows and two events, not deduplicated the way Flight/Weather are.
+- `POST /api/trips/[id]/currency-check`.
+
+**Tests — all executed for real, against real Postgres:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 152/152 passing (8 new: the conversion utility including
+  correct rounding vs. truncation, the cohesive fetch-and-record pipeline
+  with and without an amount, confirmation that every check is recorded
+  without a dedup gate, and authorization)
+- `pnpm build` → succeeded, new route registered
+- **The most comprehensive live verification of the three data agents so
+  far**: with both real Fixer and ExchangeRate credentials configured, a
+  real end-to-end run exercised the entire dual-vendor fallback chain —
+  Fixer attempted and correctly failed fast on a non-retryable 403,
+  immediate failover to ExchangeRate, which also correctly failed fast
+  the same way, both outcomes visible in the actual structured logs,
+  ending in one clean `PROVIDER_ERROR` instead of two separate unhandled
+  failures. This is the Phase 6 resilience composition — deferred all
+  the way back from Phase 5 — proven working end-to-end with two real,
+  independent, genuinely-blocked vendors. Test data and the server
+  process cleaned up afterward.
+
+**Next phase:** Phase 13 — Research Agent.
 
 ---
 

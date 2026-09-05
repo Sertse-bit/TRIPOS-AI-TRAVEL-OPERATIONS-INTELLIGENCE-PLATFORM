@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineTool } from "@/ai/tools/types";
 import { getTrip } from "@/modules/trip/trip-service";
 import { getCurrencyProvider } from "@/integrations/currency/provider";
+import { convertCurrencyAmount } from "@/ai/agents/currency-agent";
 
 /**
  * Deliberately narrow scope: this is a currency conversion calculator,
@@ -30,7 +31,7 @@ export const calculateBudgetTool = defineTool({
     await getTrip(input.tripId, context.userId);
 
     const rate = await getCurrencyProvider().getExchangeRate(input.fromCurrency, input.toCurrency);
-    const convertedAmount = Math.round(input.amount * rate.rate * 100) / 100;
+    const convertedAmount = convertCurrencyAmount(input.amount, rate.rate);
 
     return {
       originalAmount: input.amount,

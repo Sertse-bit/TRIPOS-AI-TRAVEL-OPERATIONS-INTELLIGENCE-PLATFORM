@@ -274,3 +274,41 @@ its place. Verified live: a real call against the real, sandbox-blocked
 Weatherstack API returned a genuine 403, correctly classified as
 non-retryable, and surfaced as a clean `PROVIDER_ERROR` with zero rows
 written to `weather_snapshots`.
+
+## The Currency Agent (Phase 12)
+
+`src/ai/agents/currency-agent.ts` is deliberately lighter than the
+Flight and Weather agents. Re-reading this phase's own brief text —
+retrieval, normalization, conversion, timestamped snapshots, caching —
+it does not list "detect significant changes" or "compare against
+previous snapshot" the way Phases 10 and 11 explicitly do. That's
+respected as a considered scope difference, not an oversight: an
+ordinary currency-rate fluctuation isn't actionable for a traveler the
+way a flight cancellation or severe weather is. If currency volatility
+ever needs to be a first-class alert, it fits naturally as one more
+factor in Phase 16's Risk Engine rather than being retrofitted here.
+
+Retrieval, normalization, caching, and the resilient dual-vendor
+fallback all already existed end-to-end from Phase 5/6. What this phase
+actually added: a single cohesive call
+(`getExchangeRateSnapshot`/`runCurrencyAgentForUser`) that fetches the
+rate **and** records the timestamped snapshot together — previously two
+separate, unconnected calls a caller had to remember to make both of —
+plus `convertCurrencyAmount()`, a shared, tested conversion utility that
+replaced an inline duplicate multiplication in the `calculate_budget`
+tool (Phase 8), so the rounding behavior can't quietly drift between the
+two if either is ever changed independently.
+
+**Every snapshot is recorded**, with no significance gate — consistent
+with this phase's simpler scope. Two identical consecutive checks
+produce two rows and two events, not one, unlike the Flight and Weather
+agents' deliberate deduplication.
+
+Verified live with a level of confidence the other two agents' live
+tests couldn't reach on their own: both real vendor credentials are
+configured, so a real end-to-end run exercised the **entire** dual-vendor
+fallback chain — Fixer attempted and correctly failed fast on a
+non-retryable 403, immediate failover to ExchangeRate, which also
+correctly failed fast the same way, both outcomes visible in the actual
+structured logs, ending in one clean `PROVIDER_ERROR` rather than two
+separate unhandled failures.
