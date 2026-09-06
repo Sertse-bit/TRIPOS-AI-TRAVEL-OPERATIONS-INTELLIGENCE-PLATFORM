@@ -312,3 +312,61 @@ non-retryable 403, immediate failover to ExchangeRate, which also
 correctly failed fast the same way, both outcomes visible in the actual
 structured logs, ending in one clean `PROVIDER_ERROR` rather than two
 separate unhandled failures.
+
+## The Research Agent (Phase 13)
+
+`src/ai/agents/research-agent.ts` is the first of the specialized agents
+that genuinely belongs in Phase 9's LLM orchestrator, not a plain
+TypeScript service. Re-reading its actual job — "summarize only
+retrieved information" — that's a synthesis task with no deterministic
+formula behind it, unlike Phases 10–12.
+
+### The system prompt is the actual enforcement mechanism
+
+There's no code-level check that can verify an LLM's answer only used
+retrieved facts rather than its training data — so "never present
+search-generated information as verified fact without evidence" and
+"summarize only retrieved information" are enforced by stating the
+constraint as forcefully and specifically as possible in the agent's
+role, not by a validator downstream. What _is_ code-enforced:
+`hasEvidence` is a required boolean the model must commit to, and a
+defense-in-depth check in `runResearchAgentForUser` outright rejects any
+answer that claims `hasEvidence: true` while citing zero sources —
+an internally inconsistent answer isn't passed along to the traveler
+just because it validated against the output schema's types.
+
+### Authorization runs twice, deliberately
+
+`search_destination` already re-verifies trip ownership on every call
+(Phase 8, using the real injected `userId`, never the model's `tripId`
+input). `runResearchAgentForUser` checks ownership _again_, up front,
+before spending an LLM call at all. This isn't redundant: without the
+upfront check, an unauthorized request wouldn't fail cleanly — it would
+only surface as a confusing `NOT_FOUND` tool-result buried inside the
+orchestration loop, likely still producing _some_ apologetic final
+answer rather than a clean, immediate rejection. Verified directly: a
+non-owner's request is confirmed rejected with the Anthropic mock never
+being called at all.
+
+### Efficient context, not a wasted tool call
+
+The trip's destinations are pre-fetched and included directly in the
+question sent to the model, rather than requiring the model to spend a
+tool call on `get_trip` just to learn where the trip is going — `get_trip`
+remains available if it wants more detail (dates, traveler count), but
+the common case doesn't need to ask for it.
+
+### Verification status
+
+Same situation as the orchestrator itself (Phase 9): no real
+`ANTHROPIC_API_KEY` in this sandbox. Every test mocks the Anthropic API
+boundary; the search tool, trip authorization, and Postgres underneath
+are genuinely real. Live verification went further than Phase 9 could,
+though: with no real key configured at all, the actual `@anthropic-ai/sdk`
+client throws a specific, real error — "Could not resolve authentication
+method" — _before_ attempting any network call. That propagated
+correctly through the orchestrator's own error handling as `API_ERROR`,
+through `runResearchAgentForUser` as a clean `ProviderError`, out to the
+client as a structured `502` with the full stack trace confined to the
+server log only — the Phase 2 "never leak internals" principle holding
+all the way through the deepest pipeline built so far.

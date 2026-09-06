@@ -927,7 +927,60 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 ## Phase 13 — Research Agent
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- `src/ai/agents/research-agent.ts` — the first specialized agent that
+  genuinely belongs in Phase 9's LLM orchestrator rather than a plain
+  deterministic service. "Summarize only retrieved information" is a
+  synthesis task with no formula behind it, unlike Phases 10–12.
+- The system prompt is the real enforcement mechanism for "never present
+  search-generated information as verified fact without evidence" —
+  there's no code-level way to verify an LLM's answer only used
+  retrieved facts. What _is_ code-enforced: `hasEvidence` is a required
+  boolean, and a defense-in-depth check rejects any answer claiming
+  `hasEvidence: true` while citing zero sources, rather than passing
+  along an internally inconsistent answer just because it matched the
+  schema's types.
+- Deliberate double authorization: `search_destination` already checks
+  trip ownership internally (Phase 8), but `runResearchAgentForUser`
+  checks again up front — without it, a rejection would only surface as
+  a confusing tool-result buried inside the orchestration loop instead
+  of failing cleanly before an LLM call is even made. Verified directly:
+  a non-owner's request is rejected with the mock Anthropic client never
+  called at all.
+- Trip destinations are pre-fetched into the question context rather
+  than requiring a wasted `get_trip` tool call for the common case;
+  `get_trip` stays available if more detail is needed.
+- `POST /api/trips/[id]/research`.
+
+**Tests — all executed for real, mocking only the Anthropic API boundary:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 159/159 passing (7 new: authorization enforced before
+  any LLM call, question validation, real trip context proven present
+  in the actual message sent to the model, a full search-then-answer
+  pipeline with real source attribution, an honest "no evidence found"
+  answer accepted, the inconsistent-evidence-claim rejection, and
+  orchestrator failure propagation). Applied the Phase 9 mock lesson
+  (a real `function`, not an arrow function, for the Anthropic SDK mock)
+  from the start — all tests passed on the first run, no repeat of that
+  debugging cycle.
+- `pnpm build` → succeeded, new route registered
+- **Live verification went further than Phase 9's could**: with no real
+  `ANTHROPIC_API_KEY` configured at all, the actual `@anthropic-ai/sdk`
+  client throws a specific, genuine error — "Could not resolve
+  authentication method" — before attempting any network call. Confirmed
+  that error propagates correctly through every layer: the
+  orchestrator's own handling (`API_ERROR`), `runResearchAgentForUser`'s
+  wrapping (`ProviderError`), out to the client as a clean structured
+  `502` — full stack trace confined to the server log only. The Phase 2
+  "never leak internals" principle holding through the deepest pipeline
+  built so far. Test data and the server process cleaned up afterward.
+
+**Next phase:** Phase 14 — Document Intelligence.
 
 ---
 
