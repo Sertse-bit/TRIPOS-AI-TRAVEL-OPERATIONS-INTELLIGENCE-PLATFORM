@@ -71,8 +71,12 @@ function SettingsView({
             ))}
           </ul>
           <p className="mt-3 text-xs text-sand-400">
-            Availability reflects real env-var presence, read from the server at request time.
-            Unconfigured providers run their documented mock adapters.
+            Availability reflects real env-var presence, read from the server at request time. Most
+            unconfigured providers fall back to a documented mock adapter that says so in its own
+            output. Anthropic is the exception: it has no mock, because a fabricated explanation of
+            a risk score is exactly the kind of invented capability this project refuses. Without
+            it, risk scoring still works in full and only the natural-language explanations are
+            unavailable.
           </p>
         </Card>
       </div>

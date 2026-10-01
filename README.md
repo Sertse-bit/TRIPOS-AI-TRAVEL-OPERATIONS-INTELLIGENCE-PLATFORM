@@ -43,11 +43,18 @@ metric.
   produce the same score. No model writes the number. Data that doesn't
   exist is reported as a gap instead of being scored as "no risk", and a
   cancelled flight floors severity at CRITICAL.
+- **Explainable recommendations** — an agent turns that stored score
+  into prose, and only prose. Every claim must cite a factor the
+  assessment actually produced (checked in code, not just prompted), its
+  confidence is capped by the assessment's own data coverage, and it is
+  stored linked to the exact score it explains. Requires an
+  `ANTHROPIC_API_KEY`; without one the feature says so plainly rather
+  than inventing an explanation.
 - **Frontend command center** — themed landing page, sign-in/register,
-  trips dashboard, trip detail with live agents and a risk card showing
-  every factor's points and the real values behind them, analytics
-  computed from your own rows, and a settings page showing real provider
-  availability.
+  trips dashboard, trip detail with live agents, a risk card showing
+  every factor's points and the real values behind them, and saved
+  recommendations, analytics computed from your own rows, and a settings
+  page showing real provider availability.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.
@@ -82,7 +89,9 @@ Environment variables live in `.env.local` (git-ignored). Required:
 `DATABASE_URL`, `AUTH_SECRET` (32+ chars), `REDIS_URL`. Provider keys
 (`ANTHROPIC_API_KEY`, `AVIATIONSTACK_API_KEY`, `WEATHERSTACK_API_KEY`,
 `FIXER_API_KEY`, `EXCHANGERATE_API_KEY`, and the supporting providers) are
-optional — unconfigured providers use their mock adapters.
+optional — unconfigured providers use their mock adapters, except
+`ANTHROPIC_API_KEY`, which has no mock by design: risk scoring works
+without it, and only the natural-language explanations need it.
 
 Run:
 

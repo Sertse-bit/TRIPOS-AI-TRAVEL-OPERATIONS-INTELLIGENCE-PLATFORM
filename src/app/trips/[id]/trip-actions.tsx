@@ -666,6 +666,135 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
   );
 }
 
+// --- Explain risk / recommendations (Phase 17) ---------------------------
+interface RiskExplanation {
+  decision: string;
+  reasoningSummary: string;
+  recommendationText: string;
+  confidence: number;
+  riskScore: number;
+  severity: string;
+  assessmentConfidence: number;
+  evidence: { factor: string; observation: string }[];
+}
+
+interface RecommendationRow {
+  id: string;
+  decision: string;
+  reasoningSummary: string;
+  recommendationText: string;
+  confidence: number;
+  status: string;
+  riskAssessmentId: string | null;
+  evidence: Record<string, unknown>;
+  createdAt: string;
+}
+
+function asArray(value: unknown): RiskExplanation["evidence"] {
+  return Array.isArray(value) ? (value as RiskExplanation["evidence"]) : [];
+}
+
+/**
+ * Renders the agent's prose beside the deterministic score it was
+ * written for, and says plainly when its confidence was capped by that
+ * score's own coverage -- the one place a model's self-assessment could
+ * otherwise quietly overstate itself.
+ */
+export function ExplainRiskCard({ tripId }: { tripId: string }) {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [preview, setPreview] = useState<RiskExplanation | null>(null);
+  const [saved, setSaved] = useState<RecommendationRow | null>(null);
+
+  async function handleExplain() {
+    const response = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/recommendations`, { method: "PATCH" });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Risk explanation failed.");
+      return json.data as RiskExplanation;
+    });
+    if (response) setPreview(response);
+  }
+
+  async function handleSave() {
+    const response = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/recommendations`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok || json.error)
+        throw new Error(json.error?.message ?? "Saving the recommendation failed.");
+      return json.data.recommendation as RecommendationRow;
+    });
+    if (response) {
+      setSaved(response);
+      setPreview(null);
+      router.refresh();
+    }
+  }
+
+  const explanation = preview;
+
+  return (
+    <div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button onClick={handleExplain} disabled={busy} variant="secondary">
+          {busy ? "Explaining…" : "Explain this risk"}
+        </Button>
+        <Button onClick={handleSave} disabled={busy}>
+          {busy ? "Saving…" : "Save as recommendation"}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-sand-500">
+        The score and its factors are calculated deterministically. The agent only writes the
+        explanation, and every point it makes is checked against that stored score before it is
+        shown.
+      </p>
+      <FormMessage message={message} />
+
+      {explanation && (
+        <div className="mt-3 rounded-md border border-sand-200 p-3 dark:border-sand-200">
+          <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+            {explanation.decision}
+          </p>
+          <p className="mt-1 text-xs text-sand-500">
+            Explaining risk {explanation.riskScore}/100 ({explanation.severity})
+          </p>
+
+          {asArray(explanation.evidence).length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-sand-600">
+              {asArray(explanation.evidence).map((item, index) => (
+                <li key={`${item.factor}-${index}`}>
+                  <span className="font-medium">{item.factor}</span>: {item.observation}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-2 text-sm text-sand-800 dark:text-sand-700">
+            {explanation.reasoningSummary}
+          </p>
+          <p className="mt-1 text-sm font-medium text-navy-950 dark:text-navy-100">
+            {explanation.recommendationText}
+          </p>
+
+          <p className="mt-2 text-xs text-sand-500">
+            Confidence {(explanation.confidence * 100).toFixed(0)}%
+            {explanation.confidence < explanation.assessmentConfidence
+              ? ` — capped at this assessment's own data coverage of ${(explanation.assessmentConfidence * 100).toFixed(0)}%`
+              : ""}
+          </p>
+        </div>
+      )}
+
+      {saved && (
+        <p className="mt-3 text-xs text-ok-700 dark:text-ok-500">
+          Saved as recommendation {saved.id} against risk assessment{" "}
+          {saved.riskAssessmentId ?? "(none)"}.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // --- Risk assessment (Phase 16) -----------------------------------------
 interface RiskFactor {
   key: string;

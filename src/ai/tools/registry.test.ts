@@ -46,7 +46,13 @@ describe("tool registry: the approved-tools-only boundary", () => {
     expect(isApprovedTool("constructor")).toBe(false);
   });
 
-  it("exposes exactly the 10 tools named in the brief, no more, no fewer", () => {
+  it("exposes exactly the approved tools -- the brief's 10, plus read-only risk reads", () => {
+    // The brief named 10 tools. Phase 17 added two more, both strictly
+    // read-only (get_trip_risk, get_trip_risk_history): the Risk Agent
+    // needs the stored assessment to explain it, and giving it a way to
+    // READ that score is the opposite of giving it a way to change one.
+    // The list stays exhaustive on purpose -- this is the boundary, so an
+    // unexpected addition should fail here rather than pass quietly.
     const names = getAllToolDefinitions().map((t) => t.name);
     expect(names.sort()).toEqual(
       [
@@ -60,6 +66,8 @@ describe("tool registry: the approved-tools-only boundary", () => {
         "calculate_budget",
         "create_recommendation",
         "create_alert",
+        "get_trip_risk",
+        "get_trip_risk_history",
       ].sort(),
     );
   });
@@ -230,9 +238,22 @@ describe("tool registry: successful calls, structured output, and side effects",
 
     expect(result.success).toBe(true);
     if (result.success) {
-      const data = result.data as { status: string; matches: unknown[] };
-      expect(data.status).toBe("no_documents");
+      // This tool returned a hardcoded "not yet implemented" answer while
+      // Phase 15 didn't exist. It now calls the real pgvector search, so
+      // an empty result means the trip genuinely has nothing indexed --
+      // reported as noEvidence, not dressed up as a match.
+      const data = result.data as {
+        matches: unknown[];
+        noEvidence: boolean;
+        semantic: boolean;
+        embeddingProvider: string;
+      };
       expect(data.matches).toEqual([]);
+      expect(data.noEvidence).toBe(true);
+      // The provider is always named so a lexical fallback can never be
+      // mistaken for a semantic match.
+      expect(typeof data.semantic).toBe("boolean");
+      expect(data.embeddingProvider.length).toBeGreaterThan(0);
     }
   });
 

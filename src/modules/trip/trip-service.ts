@@ -35,6 +35,11 @@ import {
   recordTripEvent,
   findEventsByTripId,
 } from "@/modules/trip/trip-event-repository";
+import {
+  type RecommendationRecord,
+  createRecommendation as createRecommendationRow,
+  findRecommendationsByTripId,
+} from "@/modules/trip/recommendation-repository";
 import { recordWeatherSnapshot as recordWeatherSnapshotRow } from "@/modules/trip/weather-snapshot-repository";
 import { recordCurrencySnapshot as recordCurrencySnapshotRow } from "@/modules/trip/currency-snapshot-repository";
 
@@ -526,4 +531,50 @@ export async function emitTripEvent(
 ): Promise<TripEventRecord> {
   await requireOwnedTrip(tripId, userId);
   return recordTripEvent({ tripId, ...input });
+}
+
+/**
+ * Writes an explainable recommendation for a trip the caller owns, and
+ * records the RECOMMENDATION_CREATED event alongside it.
+ *
+ * `riskAssessmentId` links the recommendation to the deterministic score
+ * it explains (Phase 16/17). It is the caller's — i.e. the risk module's
+ * — job to supply the id of an assessment it actually read; this
+ * function does not invent one, so a recommendation can never end up
+ * pointing at a score that was never computed.
+ */
+export async function createTripRecommendation(
+  tripId: string,
+  userId: string,
+  input: {
+    decision: string;
+    evidence: Record<string, unknown>;
+    reasoningSummary: string;
+    recommendationText: string;
+    confidence: number;
+    riskAssessmentId?: string | null;
+  },
+): Promise<RecommendationRecord> {
+  await requireOwnedTrip(tripId, userId);
+  const recommendation = await createRecommendationRow({ tripId, ...input });
+  await recordTripEvent({
+    tripId,
+    eventType: "RECOMMENDATION_CREATED",
+    entityType: "recommendation",
+    entityId: recommendation.id,
+    metadata: {
+      confidence: recommendation.confidence,
+      riskAssessmentId: recommendation.riskAssessmentId,
+    },
+  });
+  return recommendation;
+}
+
+/** A trip's stored recommendations, newest first. */
+export async function getTripRecommendations(
+  tripId: string,
+  userId: string,
+): Promise<RecommendationRecord[]> {
+  await requireOwnedTrip(tripId, userId);
+  return findRecommendationsByTripId(tripId);
 }

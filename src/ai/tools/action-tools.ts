@@ -8,8 +8,7 @@ import { recordTripEvent } from "@/modules/trip/trip-event-repository";
 /**
  * Input schema mirrors Phase 17's explainable-AI structure exactly
  * (Decision / Evidence / Reasoning / Recommendation / Confidence) --
- * this tool is the concrete write path that structure will use once
- * agents exist to call it.
+ * this tool is the concrete write path that structure uses.
  *
  * confidence is bounded to [0,1] by the schema itself, not left to the
  * caller's discretion -- a model returning 1.5 or -3 gets a validation
@@ -28,6 +27,13 @@ export const createRecommendationTool = defineTool({
     reasoningSummary: z.string().trim().min(1).max(1000),
     recommendationText: z.string().trim().min(1).max(1000).describe("What the traveler should do."),
     confidence: z.number().min(0).max(1),
+    riskAssessmentId: z
+      .string()
+      .uuid()
+      .optional()
+      .describe(
+        "The risk assessment this explains, if any. Pass the exact id returned by get_trip_risk so the recommendation stays linked to the score it was written for.",
+      ),
   }),
   execute: async (input, context) => {
     await getTrip(input.tripId, context.userId);
@@ -39,6 +45,7 @@ export const createRecommendationTool = defineTool({
       reasoningSummary: input.reasoningSummary,
       recommendationText: input.recommendationText,
       confidence: input.confidence,
+      riskAssessmentId: input.riskAssessmentId ?? null,
     });
 
     await recordTripEvent({

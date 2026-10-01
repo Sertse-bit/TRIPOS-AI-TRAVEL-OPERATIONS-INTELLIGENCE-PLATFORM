@@ -73,3 +73,19 @@ export function riskSeverityTone(severity: string): Tone {
       return "neutral";
   }
 }
+
+/**
+ * Recommendation lifecycle (Phase 17), which is a different axis from
+ * risk severity: PENDING means nobody has looked at it yet, so it reads
+ * as needing attention rather than being scored.
+ */
+export function recommendationStatusTone(status: string): Tone {
+  switch (status) {
+    case "ACKNOWLEDGED":
+      return "ok";
+    case "DISMISSED":
+      return "neutral";
+    default:
+      return "warn";
+  }
+}

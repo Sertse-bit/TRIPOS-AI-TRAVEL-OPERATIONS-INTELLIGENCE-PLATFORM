@@ -3,13 +3,20 @@ import { requireSession } from "@/app/require-auth";
 import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-service";
 import { getTripIndexStatus } from "@/modules/trip/rag-service";
 import { getLatestTripRisk } from "@/modules/risk/risk-service";
+import { listTripRecommendations } from "@/modules/risk/recommendation-service";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
-import { documentStatusTone, riskSeverityTone, tripStatusTone } from "@/components/tone";
+import {
+  documentStatusTone,
+  recommendationStatusTone,
+  riskSeverityTone,
+  tripStatusTone,
+} from "@/components/tone";
 import {
   AddDestinationForm,
   AddFlightForm,
   AddTravelerForm,
   AssessRiskButton,
+  ExplainRiskCard,
   CheckFlightStatusButton,
   CheckWeatherButton,
   CurrencyCheckForm,
@@ -106,6 +113,16 @@ function readRiskFactorLines(factors: unknown): string[] {
   });
 }
 
+/**
+ * The deterministic score a recommendation was written against, stored
+ * in its evidence column. Returns null for a recommendation written
+ * before that was recorded rather than showing a misleading number.
+ */
+function readRiskScore(evidence: Record<string, unknown>): number | null {
+  const score = evidence.riskScore;
+  return typeof score === "number" ? score : null;
+}
+
 export default async function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireSession(`/trips/${id}`);
@@ -114,6 +131,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const events = await getTripEventHistory(id, user.id);
   const { indexedChunks } = await getTripIndexStatus(id, user.id);
   const latestRisk = await getLatestTripRisk(id, user.id);
+  const recommendations = await listTripRecommendations(id, user.id);
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -370,6 +388,44 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         <div className="mt-3">
           <AssessRiskButton tripId={trip.id} />
         </div>
+
+        <div className="mt-5 border-t border-sand-200 pt-4 dark:border-sand-200">
+          <SectionHeading>Explainable recommendation</SectionHeading>
+          <ExplainRiskCard tripId={trip.id} />
+        </div>
+
+        {recommendations.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-sand-500">
+              Saved recommendations
+            </p>
+            <ul className="mt-2 space-y-2">
+              {recommendations.map((rec) => (
+                <li
+                  key={rec.id}
+                  className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+                      {rec.decision}
+                    </p>
+                    <StatusBadge status={rec.status} tone={recommendationStatusTone(rec.status)} />
+                  </div>
+                  <p className="mt-1 text-sm text-sand-800 dark:text-sand-700">
+                    {rec.recommendationText}
+                  </p>
+                  <p className="mt-1 text-xs text-sand-500">
+                    {readRiskScore(rec.evidence) !== null && (
+                      <>Risk {readRiskScore(rec.evidence)}/100 · </>
+                    )}
+                    confidence {(Number(rec.confidence) * 100).toFixed(0)}% ·{" "}
+                    {fmtDateTime(rec.createdAt)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
 
       {/* Event history */}

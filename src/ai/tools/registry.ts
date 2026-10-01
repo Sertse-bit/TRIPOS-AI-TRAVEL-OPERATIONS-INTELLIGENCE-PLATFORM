@@ -11,6 +11,7 @@ import {
 import { searchTripKnowledgeTool } from "@/ai/tools/knowledge-tools";
 import { calculateBudgetTool } from "@/ai/tools/budget-tools";
 import { createAlertTool, createRecommendationTool } from "@/ai/tools/action-tools";
+import { getTripRiskHistoryTool, getTripRiskTool } from "@/ai/tools/risk-tools";
 
 /**
  * The fixed, approved set. This map IS the security boundary the brief
@@ -31,6 +32,8 @@ const TOOL_REGISTRY = {
   calculate_budget: calculateBudgetTool,
   create_recommendation: createRecommendationTool,
   create_alert: createAlertTool,
+  get_trip_risk: getTripRiskTool,
+  get_trip_risk_history: getTripRiskHistoryTool,
 } as const satisfies Record<string, ToolDefinition>;
 
 export type ToolName = keyof typeof TOOL_REGISTRY;

@@ -82,6 +82,13 @@ export const env = loadEnv();
  * accurate status instead of inventing it.
  */
 export const providerAvailability = {
+  // Anthropic has no mock adapter, and shouldn't get one: a fabricated
+  // "AI explanation" of a risk score is precisely the failure this
+  // project exists to prevent. Without a key the explainable-AI
+  // features refuse with a clear message instead (see
+  // src/ai/agents/risk-agent.ts) -- but every deterministic feature,
+  // risk scoring included, still works.
+  anthropic: Boolean(env.ANTHROPIC_API_KEY),
   aviationstack: Boolean(env.AVIATIONSTACK_API_KEY),
   weatherstack: Boolean(env.WEATHERSTACK_API_KEY),
   fixer: Boolean(env.FIXER_API_KEY),

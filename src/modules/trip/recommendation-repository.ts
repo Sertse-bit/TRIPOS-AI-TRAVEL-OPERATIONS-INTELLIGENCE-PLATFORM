@@ -40,9 +40,11 @@ function mapRow(row: {
 }
 
 /**
- * riskAssessmentId is deliberately not accepted here yet -- Phase 16
- * doesn't exist, so there's nothing real to reference. When it lands,
- * this stays additive (an optional param), not a breaking change.
+ * `riskAssessmentId` links a recommendation back to the deterministic
+ * assessment it explains (Phase 17). Optional and additive: Phase 8
+ * created this tool before any assessment existed, and a recommendation
+ * written without one is still legitimate — it just isn't grounded in a
+ * stored score.
  */
 export async function createRecommendation(input: {
   tripId: string;
@@ -51,13 +53,15 @@ export async function createRecommendation(input: {
   reasoningSummary: string;
   recommendationText: string;
   confidence: number;
+  riskAssessmentId?: string | null;
 }): Promise<RecommendationRecord> {
   const result = await pool.query(
-    `INSERT INTO recommendations (trip_id, decision, evidence, reasoning_summary, recommendation_text, confidence)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO recommendations (trip_id, risk_assessment_id, decision, evidence, reasoning_summary, recommendation_text, confidence)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, trip_id, risk_assessment_id, decision, evidence, reasoning_summary, recommendation_text, confidence, status, created_at`,
     [
       input.tripId,
+      input.riskAssessmentId ?? null,
       input.decision,
       JSON.stringify(input.evidence),
       input.reasoningSummary,

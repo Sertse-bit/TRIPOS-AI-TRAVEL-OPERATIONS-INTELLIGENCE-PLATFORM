@@ -1315,7 +1315,88 @@ risk assessment's real evidence).
 
 ## Phase 17 — Explainable AI
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **The agent explains a score; it never produces one.** The Risk
+  Agent's only job is turning Phase 16's stored assessment into prose a
+  traveler can act on. It reads the assessment through `get_trip_risk`
+  and is explicitly told never to recompute, estimate, or contradict the
+  number. `riskAssessmentId` is supplied by the calling code from the row
+  it actually read — never by the model — so a recommendation cannot end
+  up pointing at a score that was never computed.
+- **Grounding is enforced in code, not requested in a prompt.** Every
+  evidence entry must name a factor that the stored assessment actually
+  produced; `assertGroundedInFactors` rejects the run and names the
+  offending factors otherwise. A prompt instruction is a request; this is
+  a check that fails the run. Verified live: an explanation citing
+  `hotelWifiQuality` against a five-factor assessment is rejected.
+- **Confidence cannot outrank its own evidence.** Phase 16 defines an
+  assessment's confidence as the share of factors that had real data. An
+  explanation built on a half-scored assessment cannot honestly be more
+  confident than that, so `clampConfidenceToAssessment` caps the model's
+  number in code. The UI says when this happened rather than hiding it.
+- **Fails closed on malformed data.** `findUngroundedEvidence` parses the
+  JSONB defensively; a factors column that isn't the expected array
+  grounds _nothing_, so the explanation is rejected rather than accepted
+  against factors that couldn't be verified. Caught by a test that
+  originally found a real `factors.map is not a function` crash.
+- **Anthropic has no mock adapter, deliberately.** A fabricated
+  explanation of a risk score is exactly the invented capability this
+  project exists to prevent. With no key, the feature refuses with a
+  message naming what's missing and confirming the score is unaffected —
+  and `anthropic` was added to `providerAvailability` so the settings
+  page reports its state honestly rather than implying a fallback.
+- **`search_trip_knowledge` stopped lying by omission.** It returned a
+  hardcoded "not yet implemented" answer written when Phase 15 didn't
+  exist. It now calls the real pgvector retrieval and passes through
+  `semantic` and `embeddingProvider`, so a lexical fallback match can
+  never be presented as a semantic one.
+- **`recommendations.risk_assessment_id` is finally written.** The
+  column existed since Phase 3 and was always null, with a comment
+  explaining why. It's now populated with the id of the assessment the
+  explanation was generated from, which gives the table the write path it
+  was designed for.
+- **Two read-only tools added, and the boundary test updated to say so.**
+  `get_trip_risk` and `get_trip_risk_history`. The registry test asserted
+  exactly the brief's 10 tools and correctly failed; it now lists 12 with
+  a comment explaining that both additions are read-only, and the list
+  stays exhaustive so a future tool still has to be added deliberately.
+- **API**: `POST` `/api/trips/[id]/recommendations` (explain and
+  persist), `PATCH` (explain without persisting, so a traveler can read
+  before deciding to record it), `GET` (history). All through
+  `withApiHandler`.
+- **UI**: an explainable-recommendation panel on the trip page, showing
+  the decision, each cited factor with its real values, the reasoning,
+  the action, and a confidence that discloses its own capping. Saved
+  recommendations list the score they were written against.
+
+**Tests — 19 new, 267 total across 28 files, all passing:** grounding
+rejection, confidence clamping bounds, fail-closed parsing, refusing an
+unassessed trip, refusing a non-owner before any model call, the stored
+score surviving a model that contradicts it in prose, and nothing being
+written when an explanation is rejected.
+
+**Live verification (preview):** with no `ANTHROPIC_API_KEY` configured,
+`PATCH` and `POST` both returned a clean `502 PROVIDER_ERROR` naming the
+missing key, stored **0** recommendations, and the deterministic risk
+endpoint kept working (`13/100 LOW`) — the LLM dependency degrades
+honestly without taking the scoring engine down with it. The trip page
+rendered the new panel.
+
+**Known limits:**
+
+- The agent is single-shot against the latest assessment. It does not
+  yet compare against a prior one to describe a _trend_, though
+  `get_trip_risk_history` exists for exactly that.
+- No alert is raised from a recommendation yet — `create_alert` is
+  available to agents but nothing calls it from this path (Phase 18).
+- Recommendations can't be acknowledged or dismissed in the UI yet; the
+  `RecommendationStatus` enum has always had those states and the column
+  still only ever reads PENDING.
+
+**Next phase:** Phase 18 — Event-Driven Trip Monitor.
 
 ---
 

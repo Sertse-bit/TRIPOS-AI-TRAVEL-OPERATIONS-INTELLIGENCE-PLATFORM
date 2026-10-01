@@ -451,10 +451,11 @@ Trip
 ├── Weather snapshots  recordWeatherSnapshot()  (storage only — fetching
 ├── Currency snapshots recordCurrencySnapshot()  is Phase 11/12)
 ├── Events           recordTripEvent() — immutable, every operation above writes one
-├── Risks / Recommendations   risk_assessments now written by the Risk
-│                             Engine (Phase 16, Section 18); the
-│                             recommendations side is still empty —
-│                             that write path is Phase 17
+├── Risks / Recommendations   risk_assessments written by the Risk Engine
+│                             (Phase 16, Section 18); recommendations
+│                             written by the Risk Agent and linked to
+│                             the assessment they explain (Phase 17,
+│                             Section 19)
 └── Operational state  calculateOperationalState() — deterministic, real data only
 ```
 
@@ -588,3 +589,49 @@ severity:  ≥60 CRITICAL · ≥35 HIGH · ≥15 MEDIUM · else LOW
 `calculateOperationalState()` from Section 15 is untouched: it remains
 the coarse ON_TRACK/DISRUPTED label, and this is the weighted score
 underneath it.
+
+---
+
+## 19. Explainable AI (Phase 17)
+
+Section 18 established that the score is the domain's. This phase draws
+the line that follows from it: **the model writes prose, never numbers.**
+The Risk Agent reads a stored assessment through `get_trip_risk` and
+returns Decision / Evidence / Reasoning / Recommendation / Confidence.
+Two constraints are enforced in code rather than requested in a prompt:
+
+```text
+  explanation.evidence[].factor  ∈  assessment.factors[].key   → else reject
+  min(modelConfidence, assessment.confidence)                   → capped
+```
+
+- **Grounding is checkable; prompting is not.** There's no code-level way
+  to verify an LLM's prose only used retrieved facts, which is why the
+  Research Agent (Section 9) has to settle for a `hasEvidence` flag it
+  then sanity-checks. Risk explanation can do better: because Phase 16's
+  factors are a known, finite, persisted set, every citation can be
+  validated against it. An explanation citing a factor that doesn't exist
+  is rejected and the offending names are reported.
+- **Confidence is capped by evidence coverage, in code.** Phase 16
+  defines an assessment's confidence as the share of factors that had
+  real data. Letting a model report a higher number than that would let
+  prose outrank the data under it, so the cap is applied here and
+  disclosed in the UI rather than hidden.
+- **Anthropic deliberately has no mock adapter.** Every other provider in
+  Section 6 degrades to a documented mock. A generated _explanation of a
+  risk score_ cannot: the mock would have to invent exactly the prose
+  this phase exists to ground in real evidence. So an unconfigured key
+  produces a clear refusal and the risk score stays fully available —
+  verified live: the explain routes return a clean `502 PROVIDER_ERROR`
+  naming the missing key, store nothing, and the deterministic endpoint
+  keeps working.
+- **The link back to the score is set by the caller.** `riskAssessmentId`
+  is taken from the row the calling code actually read, never from model
+  output, so a recommendation can never reference a score that was
+  never computed.
+- **`search_trip_knowledge` now searches.** It carried a hardcoded
+  "not yet implemented" response from before Phase 15 existed. It calls
+  the real pgvector retrieval and forwards `semantic` /
+  `embeddingProvider`, so a lexical fallback match can't be reported as
+  a semantic one — the same rule Section 17 established at the service
+  layer, now enforced at the tool boundary too.
