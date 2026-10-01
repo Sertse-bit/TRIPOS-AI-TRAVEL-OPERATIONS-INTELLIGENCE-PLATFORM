@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pool } from "@/infrastructure/db";
 import { countDocumentChunks } from "@/modules/trip/document-chunk-repository";
 import {
@@ -14,7 +14,20 @@ import { NotFoundError, ValidationError } from "@/shared/errors";
  * These run against a real PostgreSQL with a real pgvector column: the
  * ranking behavior under test IS the `<=>` operator, so a mocked
  * database would test nothing that matters.
+ *
+ * The embedding provider, by contrast, is pinned to the local embedder.
+ * These tests are about chunking, storage, and ranking — not about
+ * whether a vendor is reachable. Left unpinned, a configured
+ * VOYAGE_API_KEY turns the suite into a live API client, and it then
+ * fails on rate limits rather than on anything it is asserting.
  */
+vi.mock("@/integrations/embeddings/provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/integrations/embeddings/provider")>();
+  return {
+    ...actual,
+    getEmbeddingProvider: () => new actual.LocalHashingEmbeddingProvider(),
+  };
+});
 
 const OWNER_EMAIL = "rag-owner@example.com";
 const OTHER_EMAIL = "rag-other@example.com";
@@ -108,8 +121,8 @@ describe("indexTripDocument", () => {
     expect(result.documentId).toBe(documentId);
     expect(result.chunks).toBeGreaterThan(1);
     expect(result.charactersIndexed).toBeGreaterThan(0);
-    // No VOYAGE_API_KEY in the test env, so the documented local embedder
-    // is what runs — and it must not claim to be semantic.
+    // The provider is pinned to the local embedder (see the top of this
+    // file) — and it must not claim to be semantic.
     expect(result.embeddingProvider).toBe("local-hashing-embedder");
     expect(result.semantic).toBe(false);
 

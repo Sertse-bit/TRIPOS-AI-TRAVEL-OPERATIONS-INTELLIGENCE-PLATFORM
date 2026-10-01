@@ -1176,14 +1176,29 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
   the correct chunk at similarity 0.513 via
   `local-hashing-embedder`, and a gibberish query at a 0.9 floor returned
   `noEvidence: true` with zero hits. Test data removed afterwards.
+- **Live verification with a real `VOYAGE_API_KEY`** (configured after the
+  above): the same flow now reports `provider: voyage`, `semantic: true`,
+  and a genuine semantic similarity of 0.4648 for "What is the booking
+  reference on my boarding pass?" — the lexical fallback's 0.513 and the
+  vendor model's 0.4648 are different numbers because they are
+  different mechanisms, which is exactly why both are reported.
+- **Making the suite hermetic** was a real fix, not a precaution: with a
+  key configured, the retrieval tests started calling the live API and
+  failed on HTTP 429 rate limits rather than on anything they assert. Both
+  indexing test files now pin the provider to the local embedder, so the
+  suite never depends on a vendor's availability.
 
 **Known limitations:**
 
-- With no `VOYAGE_API_KEY` set, retrieval is lexical, not semantic. The
-  adapter is written against Voyage's documented request/response shape
-  and tested at the HTTP boundary, but the sandbox's network egress
-  cannot reach `api.voyageai.com`, so it has never run against the live
-  API — same caveat as the Filestack adapter in Phase 14.
+- Retrieval quality depends entirely on whether `VOYAGE_API_KEY` is
+  set: with it, semantic embeddings; without it, the lexical fallback
+  that says so in every result. The Voyage adapter is now verified
+  against the live API, not just at the HTTP boundary.
+- Voyage's rate limits are real and were observed (HTTP 429) when a test
+  suite fired dozens of embedding calls in seconds. The pipeline already
+  handles this the right way — an indexing failure is logged, the
+  document stays honestly READY, and `POST .../index` retries it — but
+  bulk re-indexing of a large corpus will want a queue (Phase 18).
 - `VOYAGE_API_KEY` was **not** added to `.env.example`: the file tooling
   in this environment refuses to write any `.env*` file. It needs that
   one line added by hand.

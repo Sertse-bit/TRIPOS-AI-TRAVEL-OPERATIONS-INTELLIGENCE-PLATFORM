@@ -24,6 +24,19 @@ vi.mock("@/integrations/document-storage/provider", () => ({
   }),
 }));
 
+/**
+ * Indexing runs as part of this upload path, so the embedding provider is
+ * pinned too — otherwise a configured VOYAGE_API_KEY would make this suite
+ * call a live API.
+ */
+vi.mock("@/integrations/embeddings/provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/integrations/embeddings/provider")>();
+  return {
+    ...actual,
+    getEmbeddingProvider: () => new actual.LocalHashingEmbeddingProvider(),
+  };
+});
+
 const OWNER_EMAIL = "document-owner@example.com";
 const OTHER_EMAIL = "document-other@example.com";
 let ownerId: string;
