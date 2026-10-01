@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "TripOS orchestrates external travel data, specialized AI agents, document intelligence, and RAG to continuously analyze travel conditions and produce explainable operational recommendations.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">{children}</body>

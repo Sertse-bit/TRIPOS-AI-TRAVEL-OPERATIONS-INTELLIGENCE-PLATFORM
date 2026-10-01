@@ -1028,7 +1028,84 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 ## Phase 21 — Frontend Command Center
 
-**Status:** Not started
+**Status:** Complete (core product experience)
+
+**Implemented:**
+
+- **Themed landing page** (`src/app/page.tsx`): hero, feature grid,
+  product visual, and CTA band. Every primary CTA routes into the auth
+  flow (`/login` / `/register`), and `/trips` is the authenticated
+  destination.
+- **Auth pages** (`src/app/login`, `src/app/register`): client forms that
+  post to the existing `/api/auth/login` and `/api/auth/register`
+  endpoints, then route to the destination preserved in `?returnTo=...`
+  (validated to a local path so a crafted value can't bounce users
+  off-site). Register mirrors the server's 12-character minimum
+  (`validatePasswordStrength`) inline.
+- **Protected trip experience** (`src/app/trips/**`):
+  - `requireSession()` (`src/app/require-auth.ts`) resolves the request's
+    session via the same `getSessionUser` the API's `requireAuth` uses,
+    and redirects anonymous visitors to
+    `/login?returnTo=<intended path>`. Applied in the trips layout and in
+    every trip page.
+  - Trips dashboard: server-rendered list from `listUserTrips`, plus a
+    small client island for creating a trip.
+  - Trip detail: the full **Trip Digital Twin** rendered server-side from
+    `getTripDigitalTwin` + `getTripEventHistory` — destinations (with the
+    Weather Agent's "Check weather"), travelers, flights (with the Flight
+    Agent's "Check status"), documents, the deterministic operational
+    state banner, and the immutable event history. Client islands for
+    currency check (Currency Agent) and the research agent.
+  - Analytics: live counts computed from the user's own rows — no cached
+    or invented metrics.
+  - Settings: account details from the real session plus each provider's
+    real configured/not-configured state, derived from
+    `providerAvailability` (names and booleans only — never key values).
+- **Shared UI primitives** (`src/components/ui.tsx`,
+  `src/components/auth-shell.tsx`): buttons, fields, badges, cards, the
+  `apiRequest`/POST helpers that unwrap the `{ data, requestId }` envelope,
+  and the auth shell. Client islands never re-fetch what a server
+  component already rendered; they post and call `router.refresh()`.
+- **Form-friendly logout** (`src/app/logout/route.ts`): a 303-redirecting
+  POST endpoint so the layout's plain `<form method="post">` works with
+  no client JS. The JSON endpoint at `/api/auth/logout` remains for
+  programmatic clients.
+- **Design system**: `src/app/globals.css` defines the full "operations-room
+  navy over warm sand" token set (navy/sand/terra scales plus ok/warn/alert
+  status tokens) with dark-mode values, wired into Tailwind's
+  `@theme inline` so all utilities resolve. No external font or asset
+  fetches — the CSP stays intact.
+
+**Files changed:**
+
+- `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css` (rewritten)
+- `src/app/require-auth.ts`, `src/app/logout/route.ts` (new)
+- `src/app/login/**`, `src/app/register/**` (new)
+- `src/app/trips/**` — layout, dashboard, new-trip island, trip detail +
+  actions + operational-state banner, analytics, settings (new)
+- `src/components/**` (new)
+
+**Verification:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 159/159 passing (20 files). No backend file was touched
+  by this phase; the suites ran against a real local Postgres + Redis.
+
+**Known limitations:**
+
+- The frontend talks to the trip module's public service functions from
+  server components (the same layer the API routes use) and to the HTTP
+  API from client islands. It does not bypass the module boundary rule —
+  it uses the service interface, not repositories directly.
+- No document upload UI yet: the documents section renders what the
+  digital twin returns, but the upload/storage + extraction pipeline is
+  Phase 14 (not started).
+- Command bar (Phase 22), observability UI (Phase 23), and the audit-trail
+  view (Phase 24) are still ahead.
+
+**Next phase:** Phase 14 — Document Intelligence (backend), with the
+frontend surface for it to follow.
 
 ---
 

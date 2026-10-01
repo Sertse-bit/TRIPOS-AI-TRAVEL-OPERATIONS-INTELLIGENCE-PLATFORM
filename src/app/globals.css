@@ -1,34 +1,168 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  /* System font stacks — no external font fetch required. Phase 21
-     (Frontend Command Center) will make a deliberate typography choice
-     for the product's visual identity; this keeps the build dependency-free
-     until then. */
-  --font-geist-sans:
+  --background: #f7f4ef;
+  --foreground: #1a1714;
+
+  /* TripOS palette — "operations-room navy" over warm paper/sand, with a
+     terracotta action accent. Dark mode flips to a deep slate base so the
+     same token names carry both themes. */
+  --navy-950: #0c1a2e;
+  --navy-900: #102a4a;
+  --navy-800: #16365c;
+  --navy-700: #1d4a7a;
+  --navy-600: #2a5d94;
+  --navy-500: #3a72ac;
+  --navy-200: #c3d3e8;
+  --navy-100: #e8eef7;
+
+  --sand-50: #fcfaf6;
+  --sand-100: #f4efe5;
+  --sand-200: #e9dccf;
+  --sand-300: #ddc9b4;
+  --sand-400: #c0ac93;
+  --sand-500: #a08a70;
+  --sand-600: #7d6a55;
+  --sand-700: #63533f;
+  --sand-800: #4a3d2e;
+
+  --terra-600: #c65a2b;
+  --terra-500: #a94a22;
+  --terra-100: #f6e3d8;
+
+  --ok-500: #2e7d4f;
+  --ok-600: #256a41;
+  --ok-700: #1d5533;
+  --ok-100: #dcefe2;
+
+  --warn-500: #c27a1a;
+  --warn-600: #a5680f;
+  --warn-700: #825307;
+  --warn-100: #f8ecd4;
+
+  --alert-500: #b03a2e;
+  --alert-600: #93291e;
+  --alert-700: #751f16;
+  --alert-100: #f8dfdb;
+
+  --rule: #d8d2c4;
+  --rule-soft: #efe9de;
+
+  --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-geist-mono:
-    ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-navy-950: var(--navy-950);
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-navy-600: var(--navy-600);
+  --color-navy-500: var(--navy-500);
+  --color-navy-200: var(--navy-200);
+  --color-navy-100: var(--navy-100);
+
+  --color-sand-50: var(--sand-50);
+  --color-sand-100: var(--sand-100);
+  --color-sand-200: var(--sand-200);
+  --color-sand-300: var(--sand-300);
+  --color-sand-400: var(--sand-400);
+  --color-sand-500: var(--sand-500);
+  --color-sand-600: var(--sand-600);
+  --color-sand-700: var(--sand-700);
+  --color-sand-800: var(--sand-800);
+
+  --color-terra-600: var(--terra-600);
+  --color-terra-500: var(--terra-500);
+  --color-terra-100: var(--terra-100);
+
+  --color-ok-100: var(--ok-100);
+  --color-ok-500: var(--ok-500);
+  --color-ok-600: var(--ok-600);
+  --color-ok-700: var(--ok-700);
+
+  --color-warn-100: var(--warn-100);
+  --color-warn-500: var(--warn-500);
+  --color-warn-600: var(--warn-600);
+  --color-warn-700: var(--warn-700);
+
+  --color-alert-100: var(--alert-100);
+  --color-alert-500: var(--alert-500);
+  --color-alert-600: var(--alert-600);
+  --color-alert-700: var(--alert-700);
+
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0b0908;
+    --foreground: #ece6dc;
+
+    --navy-950: #0e1c30;
+    --navy-900: #14355c;
+    --navy-800: #1b4777;
+    --navy-700: #24598c;
+    --navy-600: #3a72ac;
+    --navy-500: #5589bf;
+    --navy-200: #2c3e55;
+    --navy-100: #1b2738;
+
+    --sand-50: #1a1714;
+    --sand-100: #231e18;
+    --sand-200: #302a20;
+    --sand-300: #3d3529;
+    --sand-400: #5c5240;
+    --sand-500: #7d7159;
+    --sand-600: #a2957c;
+    --sand-700: #c4b79e;
+    --sand-800: #ddd2bd;
+
+    --terra-600: #e06f3c;
+    --terra-500: #d8733f;
+    --terra-100: #3a2418;
+
+    --ok-500: #5fb97a;
+    --ok-600: #74c78c;
+    --ok-700: #8bd49f;
+    --ok-100: #14291c;
+
+    --warn-500: #e0a14f;
+    --warn-600: #e7b069;
+    --warn-700: #edbf83;
+    --warn-100: #2d2312;
+
+    --alert-500: #e06f54;
+    --alert-600: #e78770;
+    --alert-700: #ed9f8d;
+    --alert-100: #2e1713;
+
+    --rule: #2a241d;
+    --rule-soft: #1b1714;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--terra-100);
+  color: var(--navy-950);
+}
+
+:focus-visible {
+  outline: 2px solid var(--navy-700);
+  outline-offset: 2px;
 }
