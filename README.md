@@ -50,11 +50,16 @@ metric.
   stored linked to the exact score it explains. Requires an
   `ANTHROPIC_API_KEY`; without one the feature says so plainly rather
   than inventing an explanation.
+- **Event-driven trip monitor** — re-checks every flight and destination
+  against its provider, recomputes risk, and alerts only when the risk
+  genuinely changes. A failed check is reported as failed, never as
+  unchanged, and repeated passes over an unchanged trip stay silent:
+  dedupe is enforced by a unique index, not a racy read-then-write.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, a risk card showing
-  every factor's points and the real values behind them, and saved
-  recommendations, analytics computed from your own rows, and a settings
-  page showing real provider availability.
+  every factor's points and the real values behind them, saved
+  recommendations, a notifications inbox, analytics computed from your
+  own rows, and a settings page showing real provider availability.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.

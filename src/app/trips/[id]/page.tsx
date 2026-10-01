@@ -23,6 +23,7 @@ import {
   DocumentSearchForm,
   DocumentUploadForm,
   ResearchForm,
+  RunMonitorButton,
   StatusSelect,
 } from "./trip-actions";
 import { OperationalStateBanner } from "./operational-state-banner";
@@ -387,6 +388,18 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         )}
         <div className="mt-3">
           <AssessRiskButton tripId={trip.id} />
+        </div>
+
+        <div className="mt-5 border-t border-sand-200 pt-4 dark:border-sand-200">
+          <SectionHeading>Monitor this trip</SectionHeading>
+          <p className="mt-1.5 text-sm text-sand-600">
+            Re-checks every flight and destination against its provider, recomputes risk, and alerts
+            you only when the risk genuinely changes. Repeated checks on an unchanged trip stay
+            silent.
+          </p>
+          <div className="mt-3">
+            <RunMonitorButton tripId={trip.id} />
+          </div>
         </div>
 
         <div className="mt-5 border-t border-sand-200 pt-4 dark:border-sand-200">

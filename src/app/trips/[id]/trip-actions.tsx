@@ -666,6 +666,170 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
   );
 }
 
+// --- Trip monitor (Phase 18) ---------------------------------------------
+interface MonitorResponse {
+  checkedFlights: { flightNumber: string; changed: boolean; skipped: boolean }[];
+  flightsChanged: number;
+  riskChange: {
+    previousScore: number;
+    riskScore: number;
+    previousSeverity: string;
+    severity: string;
+    severityChanged: boolean;
+  } | null;
+  alert: { title: string } | null;
+  alertSuppressed: boolean;
+}
+
+/**
+ * Reports honestly what the pass did, including the case that matters
+ * most for a monitor: "nothing changed" is a real and useful result, so
+ * it is stated plainly instead of rendering as an empty box.
+ */
+export function RunMonitorButton({ tripId }: { tripId: string }) {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [result, setResult] = useState<MonitorResponse | null>(null);
+
+  async function handleClick() {
+    const response = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/monitor`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Monitor pass failed.");
+      return json.data as MonitorResponse;
+    });
+    if (response) {
+      setResult(response);
+      router.refresh();
+    }
+  }
+
+  const skipped = result?.checkedFlights.filter((flight) => flight.skipped).length ?? 0;
+
+  return (
+    <div>
+      <Button onClick={handleClick} disabled={busy} variant="secondary">
+        {busy ? "Checking…" : "Run monitor check"}
+      </Button>
+      <FormMessage message={message} />
+      {result && (
+        <div className="mt-3 rounded-md border border-sand-200 p-3 text-sm dark:border-sand-200">
+          <p className="text-navy-950 dark:text-navy-100">
+            {result.alert
+              ? `Alert raised: ${result.alert.title}`
+              : result.alertSuppressed
+                ? "Risk changed, but this condition was already reported — no duplicate alert."
+                : "No meaningful change. No alert raised."}
+          </p>
+          {result.riskChange && (
+            <p className="mt-1 text-xs text-sand-600">
+              Risk {result.riskChange.previousScore}/100 ({result.riskChange.previousSeverity}) →{" "}
+              {result.riskChange.riskScore}/100 ({result.riskChange.severity}).
+            </p>
+          )}
+          <p className="mt-1 text-xs text-sand-500">
+            Checked {result.checkedFlights.length} flight(s)
+            {result.flightsChanged > 0 ? `, ${result.flightsChanged} changed` : ""}.
+            {skipped > 0 && ` ${skipped} check(s) failed — reported as failed, not as unchanged.`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Notifications (Phase 18) -------------------------------------------
+interface NotificationRow {
+  id: string;
+  title: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * Marking read is scoped server-side by the caller's own user id, so
+ * this UI cannot mark — or reveal — anyone else's notification.
+ */
+export function NotificationsList() {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [items, setItems] = useState<NotificationRow[] | null>(null);
+
+  async function load() {
+    const response = await run(async () => {
+      const res = await fetch("/api/notifications");
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Failed to load.");
+      return json.data.notifications as NotificationRow[];
+    });
+    if (response) setItems(response);
+  }
+
+  async function markRead(id: string) {
+    const done = await run(async () => {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId: id }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Failed.");
+      return json.data.updated as boolean;
+    });
+    if (done) {
+      setItems(
+        (current) =>
+          current?.map((item) =>
+            item.id === id ? { ...item, readAt: new Date().toISOString() } : item,
+          ) ?? null,
+      );
+      router.refresh();
+    }
+  }
+
+  return (
+    <div>
+      <Button onClick={load} disabled={busy} variant="secondary">
+        {busy ? "Loading…" : "Load notifications"}
+      </Button>
+      <FormMessage message={message} />
+      {items && items.length === 0 && (
+        <p className="mt-3 text-sm text-sand-600">
+          No notifications yet. Alerts appear here when monitoring finds a genuine change.
+        </p>
+      )}
+      {items && items.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              className={`rounded-lg border p-3 dark:border-sand-200 ${
+                item.readAt ? "border-sand-200 opacity-70" : "border-navy-200 bg-sand-100/40"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-navy-950 dark:text-navy-100">{item.title}</p>
+                {!item.readAt && (
+                  <Button
+                    onClick={() => markRead(item.id)}
+                    disabled={busy}
+                    variant="secondary"
+                    className="h-7 px-2 text-xs"
+                  >
+                    Mark read
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-sand-600">{item.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // --- Explain risk / recommendations (Phase 17) ---------------------------
 interface RiskExplanation {
   decision: string;

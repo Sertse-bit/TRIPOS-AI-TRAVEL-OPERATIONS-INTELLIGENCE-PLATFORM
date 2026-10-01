@@ -1402,7 +1402,96 @@ rendered the new panel.
 
 ## Phase 18 — Event-Driven Trip Monitor
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **The Section 9 event chain, minus the parts that would need faking.**
+  One pass checks every flight and destination against its provider,
+  recomputes risk, compares against the previously stored assessment,
+  and raises at most one alert. The common case — nothing changed —
+  stops there, producing no event and no alert.
+- **Anti-spam is enforced by the database, not by a check-then-act
+  race.** `createDeduplicatedNotification` inserts a `trip_events` row
+  carrying the condition's identity as its `dedupeKey` and relies on the
+  existing UNIQUE index; `ON CONFLICT DO NOTHING` returning zero rows
+  _is_ the "already reported" signal. Two concurrent passes therefore
+  cannot both observe "not yet notified" and each send one.
+- **The dedupe key is the condition, not the snapshot.** Keyed on
+  `risk_alert:<trip>:<severity>:<direction>`, so a re-check of an
+  unchanged flight stays silent while a genuinely new severity still
+  gets through. Keying on the snapshot id would have re-alerted on every
+  poll; keying on the trip alone would have swallowed the escalation,
+  which is the worst possible moment to be silent.
+- **"Changed" means changed, and the band is what counts.** A score
+  drifting 62 → 64 inside HIGH is not news and does not alert; crossing
+  a severity band does, as does a ≥20-point move inside one. Extracted
+  into a pure `isMeaningfulRiskChange` so the rule is testable on its
+  own rather than only through the whole monitor.
+- **A failed check is never reported as an unchanged one.** Each flight
+  and destination is checked inside its own try/catch; a provider error
+  is captured as `skipped: true` with its message, not swallowed into
+  "no change". One unreachable flight can't abort the pass for the rest,
+  and a broken check is never dressed up as a healthy one — the most
+  dangerous lie a monitor could tell.
+- **Risk is recomputed unconditionally, not only when a flight
+  changed.** An approaching departure or a weather shift moves the score
+  with no flight status change at all; gating on status changes would
+  blind the monitor to exactly the factors that move on their own.
+- **The first pass is a baseline and raises nothing.** With no prior
+  assessment there is nothing to have changed _from_, so the pass records
+  the score without alerting. Alerting on "start watching this trip"
+  would be a notification storm; the score is fully visible in the UI
+  regardless.
+- **Only escalations push a notification.** A genuine improvement is
+  still recorded as an assessment and an event, but interrupting someone
+  because their trip got _better_ is noise, not service.
+- **Anthropic is deliberately not involved.** A monitoring pass must not
+  fail — or silently skip — because an optional dependency is missing,
+  so the Phase 17 explanation step is not invoked here.
+- **Notifications link to the trip event that authorised them.**
+  `notifications.trip_event_id` was in the schema since Phase 3 and had
+  no writer; the event is now inserted first and the notification
+  references it, which is the shape the schema always implied.
+- **API**: `POST /api/trips/[id]/monitor`,
+  `GET|PATCH /api/notifications`. **UI**: a "Monitor this trip" panel on
+  the trip page that reports what the pass actually did (including
+  "no meaningful change" and "failed checks, not unchanged"), plus a
+  notifications page with a mark-read action.
+
+**Tests — 15 new, 282 total across 29 files, all passing:** the
+meaningfulness rule as a pure function; one notification for repeated
+identical conditions; HIGH → CRITICAL → HIGH each alerting because each
+is new information; mark-read idempotence and cross-user refusal; a
+baseline pass not alerting; a real escalation alerting; a failed provider
+call reported as skipped; and a non-owner rejected.
+
+**Live verification (preview):** 5 monitor passes over one trip produced
+exactly **1** notification. Pass 1 (baseline) and passes 2 were silent;
+moving the flight's real `scheduled_departure` inside the 72h horizon
+moved risk 13/100 LOW → 27/100 MEDIUM, raised one alert, and passes 4–5
+stayed silent. Mark-read returned `updated: true` then `false` on a
+second call; a second user saw 0 notifications and got `updated: false`
+for someone else's id; a non-owner got `NOT_FOUND`, not `403`. All
+smoke data deleted — every table back to zero.
+
+**Known limits:**
+
+- **No BullMQ worker yet.** Phase 1 chose BullMQ and Redis _is_
+  configured, but a durable queue needs a long-running worker process,
+  which a Next.js request handler cannot honestly be. The monitor runs
+  synchronously per request so every guarantee above is real and tested;
+  moving it behind a worker is a dispatch change, not a logic change,
+  since `monitorTrip` takes an owner id and does no authorization.
+- Scheduling is manual — "run a monitor check" is a button. Phase 19 is
+  where that becomes automatic, and is exactly what this phase was
+  shaped to accept.
+- `create_alert` still exists as a separate agent-facing tool that
+  bypasses the dedupe gate. Nothing calls it from this path, but it is
+  a footgun left open.
+
+**Next phase:** Phase 19 — Trip Watch (scheduling and preferences, on
+top of this monitor).
 
 ---
 

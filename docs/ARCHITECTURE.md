@@ -635,3 +635,53 @@ Two constraints are enforced in code rather than requested in a prompt:
   `embeddingProvider`, so a lexical fallback match can't be reported as
   a semantic one — the same rule Section 17 established at the service
   layer, now enforced at the tool boundary too.
+
+---
+
+## 20. Trip Monitor (Phase 18)
+
+Section 9's event chain is now real code, minus the two pieces that
+would otherwise have to be faked:
+
+```text
+monitorTrip(tripId, ownerId)
+  │
+  ├─ for each flight      → processFlightStatusUpdate()  (Phase 10)
+  ├─ for each destination → processWeatherUpdate()       (Phase 11)
+  │     each failure captured as skipped: true, never as "unchanged"
+  │
+  ├─ assessTripRisk()  unconditionally  (Phase 16)
+  ├─ compare to the previously stored assessment
+  │     └─ no meaningful change → stop. no event, no alert.
+  │
+  └─ meaningful? → createDeduplicatedNotification()
+        INSERT ... ON CONFLICT (dedupe_key) DO NOTHING
+        0 rows returned  →  already reported  →  no duplicate
+```
+
+- **Idempotency is the database's job, not a check-then-act race.**
+  `trip_events.dedupe_key` already carries a UNIQUE index from Phase 3.
+  Claiming the key with `ON CONFLICT DO NOTHING` makes "already
+  reported" an atomic outcome, so two concurrent passes cannot both see
+  the gap and each notify. A read-then-write guard would have the same
+  shape as the guarantee and none of the strength.
+- **The key is the condition, not the snapshot or the entity.**
+  `risk_alert:<trip>:<severity>:<direction>`. Snapshot-keyed would
+  re-alert on every poll of an unchanged flight; trip-keyed would
+  swallow an escalation, which is the worst moment to be silent.
+- **Severity band, not raw score, is the alerting signal.** 62 → 64
+  inside HIGH is not news. This is Section 18's "missing data is a
+  result, not zero risk" applied to alerting: the same discipline that
+  stops the score inventing risk stops the monitor inventing urgency.
+- **A failed check is its own result.** Captured per entity so one bad
+  provider can't abort the pass, and surfaced as `skipped` so a broken
+  check is never indistinguishable from a healthy one.
+- **Two things are honestly not built.** There is no BullMQ worker:
+  a durable queue needs a long-running process that a Next.js route
+  handler is not, and pretending otherwise would be a worse lie than the
+  omission. The Phase 17 explanation step is not invoked either, because
+  a monitoring pass must not depend on an optional key being present.
+- **Notifications are linked to the event that authorised them.**
+  `notifications.trip_event_id` existed with no writer; the event is now
+  inserted first and the notification references it, which is the order
+  the schema implies.
