@@ -58,3 +58,18 @@ export function documentStatusTone(status: string): Tone {
       return "neutral";
   }
 }
+
+/** Phase 16 risk severity — the same four bands the scoring model emits. */
+export function riskSeverityTone(severity: string): Tone {
+  switch (severity) {
+    case "LOW":
+      return "ok";
+    case "MEDIUM":
+      return "warn";
+    case "HIGH":
+    case "CRITICAL":
+      return "alert";
+    default:
+      return "neutral";
+  }
+}

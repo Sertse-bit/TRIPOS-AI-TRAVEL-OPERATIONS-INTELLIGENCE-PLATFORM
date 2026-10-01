@@ -427,7 +427,7 @@ Phase 1 defines shape and boundaries, not implementation detail. Not
 decided here, on purpose:
 
 - Exact retry counts / backoff curve per provider → Phase 6
-- Risk scoring formula and factor weights → Phase 16
+- Risk scoring formula and factor weights → Phase 16 (decided; see Section 18)
 - Embedding model and chunking parameters → Phase 15
 - Exact Redis key/TTL scheme → Phase 6 and Phase 12
 - Rate-limit thresholds per route → Phase 4
@@ -451,7 +451,10 @@ Trip
 ├── Weather snapshots  recordWeatherSnapshot()  (storage only — fetching
 ├── Currency snapshots recordCurrencySnapshot()  is Phase 11/12)
 ├── Events           recordTripEvent() — immutable, every operation above writes one
-├── Risks / Recommendations   genuinely empty — no write path exists until Phase 16/17
+├── Risks / Recommendations   risk_assessments now written by the Risk
+│                             Engine (Phase 16, Section 18); the
+│                             recommendations side is still empty —
+│                             that write path is Phase 17
 └── Operational state  calculateOperationalState() — deterministic, real data only
 ```
 
@@ -532,3 +535,56 @@ from that phase are worth recording:
   a cross-trip leak can't come from a missing or reordered authorization
   step. Retrieval returns stored chunks with their similarity; composing
   an answer from them is Phase 17's job, not this layer's.
+
+---
+
+## 18. Risk Engine (Phase 16)
+
+Section 14 deferred "risk scoring formula and factor weights" here on
+purpose. The decision, and three things it taught while being built:
+
+```text
+riskScore (0-100)  =  Σ  ratio_i × weight_i      weights sum to exactly 100
+
+  flightDisruption      40   worst real flight status drives it
+  weatherSeverity       20   scales from documented wind/rain floors
+  scheduleProximity     15   rises as departure approaches (72h horizon)
+  itineraryCompleteness 15   destinations and travelers present
+  documentReadiness     10   extracted and indexed
+
+severity:  ≥60 CRITICAL · ≥35 HIGH · ≥15 MEDIUM · else LOW
+```
+
+- **The scoring model is a pure function and cannot become a model's
+  opinion.** `risk-scoring.ts` takes already-gathered inputs and
+  returns a score — no DB, no clock, no network, no LLM. That is what
+  makes "the same inputs always give the same score" a property rather
+  than a promise. Generating the _explanation_ of a score in prose is
+  Phase 17's job, and only that.
+- **Absence of data is a first-class result, not zero risk.** A factor
+  with nothing behind it scores 0, is flagged `dataAvailable: false`,
+  and has its weight counted into `dataGaps`. `confidence` is defined as
+  the share of factors that actually had data, so it describes evidence
+  coverage and never pretends to be a probability that something bad
+  will happen. A trip nothing is known about is confidently _unknown_,
+  which is the truthful answer.
+- **A cancelled flight floors severity at CRITICAL.** Weighted alone it
+  scores 40/100 and reads "HIGH", because the other four factors really
+  are quiet — but a cancellation means the trip cannot proceed, which is
+  categorically different from "several things are slightly elevated".
+  Same reasoning `calculateOperationalState()` already applies with its
+  DISRUPTED label in Section 15.
+- **Thresholds have floors, and that was a bug first.** Weather scaling
+  began as `wind / 80` with no lower bound, which rated an 8 kph breeze
+  at 0.1 risk. Unit tests caught it; the fix scales between documented
+  floors and ceilings instead. A risk engine that cannot say "nothing is
+  wrong" will eventually invent something that is.
+- **The module reads the Trip Service's public interface only.** The
+  engine is its own module, so the data it needs (latest status per
+  flight, latest weather per destination, which documents are indexed)
+  arrives through new Trip Service functions rather than through another
+  module's repositories — the same boundary rule Section 15 established.
+
+`calculateOperationalState()` from Section 15 is untouched: it remains
+the coarse ON_TRACK/DISRUPTED label, and this is the weighted score
+underneath it.

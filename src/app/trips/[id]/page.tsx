@@ -2,12 +2,14 @@ import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
 import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-service";
 import { getTripIndexStatus } from "@/modules/trip/rag-service";
+import { getLatestTripRisk } from "@/modules/risk/risk-service";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
-import { documentStatusTone, tripStatusTone } from "@/components/tone";
+import { documentStatusTone, riskSeverityTone, tripStatusTone } from "@/components/tone";
 import {
   AddDestinationForm,
   AddFlightForm,
   AddTravelerForm,
+  AssessRiskButton,
   CheckFlightStatusButton,
   CheckWeatherButton,
   CurrencyCheckForm,
@@ -78,6 +80,32 @@ function hasFacts(facts: DocumentFacts): boolean {
   );
 }
 
+/**
+ * The stored `factors` column is the risk model's own output, written by
+ * the engine — so this reads its shape rather than recomputing anything.
+ * Anything unrecognized is skipped instead of rendered as if it were a
+ * scored factor.
+ */
+interface StoredRiskFactor {
+  label?: unknown;
+  points?: unknown;
+  weight?: unknown;
+  detail?: unknown;
+  dataAvailable?: unknown;
+}
+
+function readRiskFactorLines(factors: unknown): string[] {
+  if (!Array.isArray(factors)) return [];
+  return factors.flatMap((entry) => {
+    const factor = entry as StoredRiskFactor;
+    if (typeof factor.label !== "string" || typeof factor.detail !== "string") return [];
+    const scored = factor.dataAvailable === false ? " (not scored — no data)" : "";
+    return [
+      `${factor.label}: ${String(factor.points ?? "?")}/${String(factor.weight ?? "?")}${scored} — ${factor.detail}`,
+    ];
+  });
+}
+
 export default async function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireSession(`/trips/${id}`);
@@ -85,6 +113,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const twin = await getTripDigitalTwin(id, user.id);
   const events = await getTripEventHistory(id, user.id);
   const { indexedChunks } = await getTripIndexStatus(id, user.id);
+  const latestRisk = await getLatestTripRisk(id, user.id);
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -297,6 +326,50 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             : "Nothing indexed yet. Upload a PDF that finishes text extraction and its content is indexed automatically."}
         </p>
         <DocumentSearchForm tripId={trip.id} />
+      </Card>
+
+      {/* Risk assessment (Phase 16) */}
+      <Card className="mt-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <SectionHeading>Risk assessment</SectionHeading>
+            <p className="mt-1.5 text-sm text-sand-600">
+              A deterministic weighted score over this trip&apos;s real flight, weather, schedule,
+              and document data. No model writes the number — the same inputs always produce the
+              same score.
+            </p>
+          </div>
+          {latestRisk && (
+            <StatusBadge
+              status={latestRisk.severity}
+              tone={riskSeverityTone(latestRisk.severity)}
+            />
+          )}
+        </div>
+
+        {latestRisk ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-navy-950 dark:text-navy-100">
+              Score <strong>{latestRisk.riskScore}/100</strong> ·{" "}
+              {Number(latestRisk.confidence) === 1
+                ? "all factors had data"
+                : `confidence ${(Number(latestRisk.confidence) * 100).toFixed(0)}% — some factors had no data`}
+            </p>
+            <ul className="space-y-1 text-xs text-sand-500">
+              {readRiskFactorLines(latestRisk.factors).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-sand-400">Generated {fmtDateTime(latestRisk.generatedAt)}</p>
+          </div>
+        ) : (
+          <EmptyState>
+            <span className="mt-2 block">No assessment yet — generate one to score this trip.</span>
+          </EmptyState>
+        )}
+        <div className="mt-3">
+          <AssessRiskButton tripId={trip.id} />
+        </div>
       </Card>
 
       {/* Event history */}

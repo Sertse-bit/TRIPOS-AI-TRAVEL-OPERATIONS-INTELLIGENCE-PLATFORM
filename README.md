@@ -37,9 +37,17 @@ metric.
   similarity within the trip. Without a `VOYAGE_API_KEY` it falls back to
   a local hashing embedder that is genuinely lexical rather than
   semantic, and says so in every result instead of pretending otherwise.
+- **Risk engine** — a deterministic weighted score (flight disruption,
+  weather, schedule proximity, itinerary and document readiness) computed
+  as a pure function over real stored data, so the same inputs always
+  produce the same score. No model writes the number. Data that doesn't
+  exist is reported as a gap instead of being scored as "no risk", and a
+  cancelled flight floors severity at CRITICAL.
 - **Frontend command center** — themed landing page, sign-in/register,
-  trips dashboard, trip detail with live agents, analytics computed from
-  your own rows, and a settings page showing real provider availability.
+  trips dashboard, trip detail with live agents and a risk card showing
+  every factor's points and the real values behind them, analytics
+  computed from your own rows, and a settings page showing real provider
+  availability.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.

@@ -1214,7 +1214,102 @@ scoring over flight, weather, schedule, and document completeness).
 
 ## Phase 16 — Risk Engine
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **A real deterministic scoring model, not an AI-generated number.** The
+  schema comment on `risk_assessments` has always said the factor
+  breakdown belongs to the domain model, never to an LLM free-inventing
+  a score. `src/modules/risk/risk-scoring.ts` is a pure function — no
+  database, no clock, no I/O — so identical input provably produces an
+  identical output. No model is called anywhere in this phase; writing
+  the prose _explanation_ of a risk assessment is Phase 17's job.
+- **Five weighted factors summing to exactly 100** (asserted in a test,
+  not just a comment): flight disruption 40, weather severity 20,
+  schedule proximity 15, itinerary completeness 15, document readiness 10. Section 14's deferred "risk scoring formula and factor weights"
+  are now decided and written down.
+- **Missing data is reported, never converted into a fake score.** A
+  flight that has never been polled, a destination with no weather
+  reading, a stale reading older than 24h — each scores zero _and_ is
+  flagged `dataAvailable: false`, with its weight counted in a
+  `dataGaps` total. `confidence` is defined as the share of factors
+  that actually had data, so it is a statement about evidence coverage
+  and never a probability of danger.
+- **Weather scales from documented thresholds, not from zero.** The first
+  version divided wind speed by 80 with no floor, which scored an 8 kph
+  breeze at 0.1 risk — a small invented metric of exactly the kind this
+  project forbids. Caught by a unit test, not by reading the code. Wind
+  and precipitation now scale between documented floors and ceilings.
+- **A cancelled flight floors severity at CRITICAL.** A weighted sum
+  alone rated a cancelled flight "HIGH" (40/100, since the other four
+  factors are genuinely quiet), which understates it: the trip cannot
+  proceed. That's a documented floor, the same distinction
+  `calculateOperationalState()` already draws with DISRUPTED — not a
+  fudge factor.
+- **A live bug the tests could not have caught:** an all-clear trip
+  stored an _empty_ `detail` string for its top-weighted factor,
+  rendering as a blank line in the UI. Found by inspecting real preview
+  output, after the unit tests were already green. Zero risk is a real
+  finding and now says so.
+- **Module boundary respected.** The Risk Engine is a separate module
+  and reads the trip's data only through new public Trip Service
+  functions (`getTripFlightStatuses`, `getTripWeatherSnapshots`,
+  `emitTripEvent`) — never another module's repositories.
+  `getTripIndexStatus()` gained `indexedDocumentIds` for the same
+  reason, rather than the risk module querying `document_chunks`
+  itself.
+- **Append-only, like the rest of this project's history.** Each
+  assessment is a new `risk_assessments` row plus a
+  `RISK_ASSESSMENT_GENERATED` event, so a trip's risk evolution stays
+  inspectable instead of being overwritten. `severity` is written with
+  an explicit `$3::"RiskSeverity"` cast per the AGENTS.md enum rule.
+- **API**: `POST` `/api/trips/[id]/risk` (compute + persist — a POST,
+  because it writes) and `GET` for the assessment history. Both through
+  `withApiHandler`.
+- **UI**: a risk card on the trip detail page showing the score,
+  severity badge, per-factor points _and the real values behind them_,
+  and an explicit "(not scored — no data)" label on any factor that had
+  nothing to score.
+
+**Tests — 34 new, 248 total across 27 files, all passing:**
+
+- `risk-scoring.test.ts` (26) — pure, no database: weight sum, the
+  threshold table and its monotonicity across all 100 scores, each
+  factor's scaling, determinism, and that factor points sum to the
+  reported score.
+- `risk-service.test.ts` (8) — against real Postgres: reading real rows
+  into a real score, the enum and JSON columns round-tripping as typed
+  values, cancelled-beats-scheduled, append-only history, ownership
+  (`NotFoundError`, not 403, with nothing written), and one trip never
+  scoring another trip's documents.
+
+**Live verification (preview):** register → trip → traveler →
+destination → weather check → flight → status check → risk POST returned
+a real `19/100 MEDIUM` with `confidence 0.8`, all five factors explaining
+themselves, 4 `RISK_ASSESSMENT_GENERATED` events after 4 calls, and the
+trip page rendering the card. All smoke-test data deleted afterwards —
+`users`, `trips`, `risk_assessments`, and `document_chunks` all back to
+zero.
+
+**Environment note:** an intermediate risk POST appeared to take ~3
+minutes. It was not: this sandbox has 1 CPU and the dev server was
+being starved by concurrent scripts of mine. Timed in isolation the
+whole service is **34ms**. Worth recording, because "slow endpoint" was
+the wrong diagnosis and only measuring separated the two.
+
+**Known limits:**
+
+- Prose explanations of a risk assessment are Phase 17's job; this
+  phase produces the score, its factors, and its evidence only.
+- Document readiness uses chunk presence as a proxy for "indexed",
+  which is coarse — a trip with one short document reads the same as one
+  with a long indexed corpus.
+- Scores don't yet feed recommendations; `recommendations.risk_assessment_id`
+  exists and is still always null (Phase 17).
+
+**Next phase:** Phase 17 — Explainable AI (ground recommendations in a
+risk assessment's real evidence).
 
 ---
 

@@ -3,6 +3,7 @@ import { NotFoundError, ProviderError, ValidationError } from "@/shared/errors";
 import { chunkDocumentText } from "@/modules/trip/document-chunking";
 import {
   countChunksForTrip,
+  findIndexedDocumentIdsForTrip,
   replaceDocumentChunks,
   searchChunksByVector,
 } from "@/modules/trip/document-chunk-repository";
@@ -186,11 +187,23 @@ export async function searchTripDocuments(
   };
 }
 
-/** How much of this trip is actually searchable right now. */
+/**
+ * How much of this trip is actually searchable right now.
+ *
+ * `indexedDocumentIds` (rather than just a count) exists because the
+ * Phase 16 Risk Engine needs to know *which* documents are searchable to
+ * judge readiness, and it must ask through this public interface rather
+ * than querying `document_chunks` itself — the same module boundary
+ * every other cross-module read respects.
+ */
 export async function getTripIndexStatus(
   tripId: string,
   userId: string,
-): Promise<{ indexedChunks: number }> {
+): Promise<{ indexedChunks: number; indexedDocumentIds: string[] }> {
   await getTrip(tripId, userId);
-  return { indexedChunks: await countChunksForTrip(tripId) };
+  const [indexedChunks, indexedDocumentIds] = await Promise.all([
+    countChunksForTrip(tripId),
+    findIndexedDocumentIdsForTrip(tripId),
+  ]);
+  return { indexedChunks, indexedDocumentIds };
 }

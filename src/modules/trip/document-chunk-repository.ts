@@ -136,6 +136,22 @@ export async function countChunksForTrip(tripId: string): Promise<number> {
 }
 
 /**
+ * Which of a trip's documents have at least one indexed chunk. Scoped
+ * by trip through the same join as every other query here, so a document
+ * belonging to another trip can never appear in the result.
+ */
+export async function findIndexedDocumentIdsForTrip(tripId: string): Promise<string[]> {
+  const result = await pool.query<{ trip_document_id: string }>(
+    `SELECT DISTINCT c.trip_document_id
+     FROM document_chunks c
+     JOIN trip_documents d ON d.id = c.trip_document_id
+     WHERE d.trip_id = $1`,
+    [tripId],
+  );
+  return result.rows.map((row) => row.trip_document_id);
+}
+
+/**
  * Top-N most similar chunks within one trip.
  *
  * Scoped by `trip_id` rather than by document id list so a query can

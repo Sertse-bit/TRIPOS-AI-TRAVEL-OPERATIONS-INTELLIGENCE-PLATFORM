@@ -1,3 +1,4 @@
+import { pool } from "@/infrastructure/db";
 import { NotFoundError } from "@/shared/errors";
 import {
   type TripRecord,
@@ -380,4 +381,149 @@ export async function getTripDocuments(
 ): Promise<TripDocumentRecord[]> {
   await requireOwnedTrip(tripId, userId);
   return findDocumentsByTripId(tripId);
+}
+
+// --- Public seams for the Risk Engine (Phase 16) -------------------------
+//
+// The Risk Engine is a separate module, so per the brief's module
+// boundary rule it may only call the Trip Service's public interface --
+// never its repositories. These three functions are that interface for
+// the read-only data the scoring model needs. Each returns genuinely
+// stored rows (or an honest empty list when nothing has been recorded
+// yet); none of them substitutes a default value for missing data.
+
+/**
+ * One row per flight: its latest status snapshot if one exists, or
+ * `status: null` when the Flight Agent has never polled it. Deliberately
+ * NOT filtered to flights that have snapshots — "this flight has never
+ * been checked" is itself information the risk model reports on, and
+ * hiding it would make an unmonitored trip look identical to a
+ * fully-monitored on-time one.
+ *
+ * One statement (DISTINCT ON), not a query per flight.
+ */
+export async function getTripFlightStatuses(
+  tripId: string,
+  userId: string,
+): Promise<
+  Array<{
+    flightId: string;
+    flightNumber: string;
+    airline: string;
+    scheduledDeparture: Date;
+    scheduledArrival: Date;
+    status: string | null;
+    delayMinutes: number | null;
+    fetchedAt: Date | null;
+  }>
+> {
+  await requireOwnedTrip(tripId, userId);
+
+  const result = await pool.query(
+    `SELECT f.id AS flight_id, f.flight_number, f.airline,
+            f.scheduled_departure, f.scheduled_arrival,
+            s.status, s.delay_minutes, s.fetched_at
+     FROM flight_records f
+     LEFT JOIN LATERAL (
+       SELECT status, delay_minutes, fetched_at
+       FROM flight_status_snapshots
+       WHERE flight_record_id = f.id
+       ORDER BY fetched_at DESC
+       LIMIT 1
+     ) s ON true
+     WHERE f.trip_id = $1
+     ORDER BY f.scheduled_departure ASC`,
+    [tripId],
+  );
+
+  return result.rows.map((row) => ({
+    flightId: row.flight_id,
+    flightNumber: row.flight_number,
+    airline: row.airline,
+    scheduledDeparture: row.scheduled_departure,
+    scheduledArrival: row.scheduled_arrival,
+    status: row.status ?? null,
+    delayMinutes: row.delay_minutes ?? null,
+    fetchedAt: row.fetched_at ?? null,
+  }));
+}
+
+/**
+ * One row per destination, with its latest weather snapshot if one has
+ * ever been fetched (Weather Agent). Same rule as flights above: a
+ * destination that was never checked is reported as `snapshot: null`
+ * rather than omitted.
+ */
+export async function getTripWeatherSnapshots(
+  tripId: string,
+  userId: string,
+): Promise<
+  Array<{
+    destinationId: string;
+    city: string;
+    country: string;
+    snapshot: {
+      temperatureCelsius: number;
+      condition: string;
+      windSpeedKph: number | null;
+      precipitationMm: number | null;
+      fetchedAt: Date;
+    } | null;
+  }>
+> {
+  await requireOwnedTrip(tripId, userId);
+
+  const result = await pool.query(
+    `SELECT d.id AS destination_id, d.city, d.country,
+            w.temperature_celsius, w.condition, w.wind_speed_kph,
+            w.precipitation_mm, w.fetched_at
+     FROM destinations d
+     LEFT JOIN LATERAL (
+       SELECT temperature_celsius, condition, wind_speed_kph,
+              precipitation_mm, fetched_at
+       FROM weather_snapshots
+       WHERE destination_id = d.id
+       ORDER BY fetched_at DESC
+       LIMIT 1
+     ) w ON true
+     WHERE d.trip_id = $1
+     ORDER BY d.order_index ASC, d.created_at ASC`,
+    [tripId],
+  );
+
+  return result.rows.map((row) => ({
+    destinationId: row.destination_id,
+    city: row.city,
+    country: row.country,
+    snapshot:
+      row.fetched_at === null
+        ? null
+        : {
+            temperatureCelsius: Number(row.temperature_celsius),
+            condition: row.condition,
+            windSpeedKph: row.wind_speed_kph !== null ? Number(row.wind_speed_kph) : null,
+            precipitationMm: row.precipitation_mm !== null ? Number(row.precipitation_mm) : null,
+            fetchedAt: row.fetched_at,
+          },
+  }));
+}
+
+/**
+ * The one supported way for another module to append to a trip's event
+ * history. Wraps the internal append-only repository so the boundary is
+ * explicit and so ownership can be checked by the same rule as every
+ * other trip operation.
+ */
+export async function emitTripEvent(
+  tripId: string,
+  userId: string,
+  input: {
+    eventType: string;
+    entityType: string;
+    entityId: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<TripEventRecord> {
+  await requireOwnedTrip(tripId, userId);
+  return recordTripEvent({ tripId, ...input });
 }

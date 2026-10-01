@@ -666,7 +666,86 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
   );
 }
 
-// --- Document search (Phase 15 RAG) ---------------------------------------
+// --- Risk assessment (Phase 16) -----------------------------------------
+interface RiskFactor {
+  key: string;
+  label: string;
+  weight: number;
+  points: number;
+  dataAvailable: boolean;
+  detail: string;
+}
+
+interface RiskResponse {
+  assessment: {
+    id: string;
+    riskScore: number;
+    severity: string;
+    confidence: number;
+  };
+  factors: RiskFactor[];
+  dataGaps: number;
+}
+
+/**
+ * Shows the score and, critically, WHY: each factor's own points out of
+ * its own weight, plus the real values behind it. A factor with no data
+ * is labelled as unscored rather than quietly presented as zero risk.
+ */
+export function AssessRiskButton({ tripId }: { tripId: string }) {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [result, setResult] = useState<RiskResponse | null>(null);
+
+  async function handleClick() {
+    const response = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/risk`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Risk assessment failed.");
+      return json.data as RiskResponse;
+    });
+    if (response) {
+      setResult(response);
+      router.refresh();
+    }
+  }
+
+  return (
+    <div>
+      <Button onClick={handleClick} disabled={busy} variant="secondary">
+        {busy ? "Assessing…" : "Assess risk now"}
+      </Button>
+      <FormMessage message={message} />
+      {result && (
+        <div className="mt-3 rounded-md border border-sand-200 p-3 dark:border-sand-200">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+              Risk score {result.assessment.riskScore}/100 · {result.assessment.severity}
+            </p>
+            <p className="text-xs text-sand-500">
+              confidence {(result.assessment.confidence * 100).toFixed(0)}% of factors had data
+            </p>
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {result.factors.map((factor) => (
+              <li key={factor.key} className="text-xs">
+                <span className="font-medium text-sand-700 dark:text-sand-600">
+                  {factor.label}: {factor.points}/{factor.weight}
+                </span>
+                {!factor.dataAvailable && (
+                  <span className="ml-1 text-warn-700 dark:text-warn-500">
+                    (not scored — no data)
+                  </span>
+                )}
+                <span className="block text-sand-500">{factor.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface SearchHit {
   documentId: string;
