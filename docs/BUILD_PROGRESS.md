@@ -986,7 +986,90 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 ## Phase 14 — Document Intelligence
 
-**Status:** Not started
+**Status:** Complete (backend pipeline)
+
+**Implemented:**
+
+- **Real upload + extraction pipeline** (`src/modules/trip/document-service.ts`):
+  validate → store → persist (UPLOADED) → extract → READY/FAILED. This
+  is Section 13's flow with one honest deviation: extraction runs inline
+  in the request instead of on a BullMQ worker, because the queue/worker
+  infrastructure is explicitly Phase 18's deliverable. The processing
+  function is isolated so moving it behind a worker later is a wiring
+  change, not a rewrite.
+- **Content-based validation stays authoritative**: the service reuses
+  `validateFileUpload` (Phase 4) — magic-byte sniffing via `file-type`,
+  10MB cap, declared-vs-actual MIME mismatch rejection — before anything
+  reaches storage.
+- **Real PDF text extraction** (`document-extraction.ts`) via `unpdf`, a
+  maintained pdf.js wrapper with zero runtime dependencies. Tests run
+  the real parser against a programmatically built, byte-valid PDF
+  fixture — the parser is never mocked.
+- **Deterministic, evidence-backed structured metadata**: flight numbers
+  (deny-listing currency codes so `USD 100` isn't a "flight"), ISO and
+  written dates, and booking references (6-char alphanumeric requiring a
+  letter AND a digit, only near booking-ish keywords). Each fact carries
+  its surrounding text as evidence. No LLM, nothing guessed.
+- **Honest failure semantics**, per Section 13's rule that READY is
+  never claimed unless extraction actually happened:
+  - Images (JPEG/PNG) are stored but FAILED with an explicit reason —
+    OCR is not implemented in this build.
+  - A PDF with no text layer is FAILED ("No extractable text found"),
+    not READY-with-empty-text.
+  - A corrupt PDF is FAILED with a generic client-safe reason; full
+    parser detail goes to the server log only.
+  - A storage-provider failure propagates and creates no document row;
+    ownership is checked before any provider call.
+- **Real status transitions**: UPLOADED → PROCESSING → READY/FAILED,
+  with PROCESSING written before extraction starts.
+- **Events**: DOCUMENT_UPLOADED (existing) plus DOCUMENT_PROCESSED /
+  DOCUMENT_PROCESSING_FAILED carrying page count or reason.
+- **API**: `POST /api/trips/[id]/documents` (multipart `file` field) and
+  `GET /api/trips/[id]/documents`, both through `withApiHandler`.
+- **Schema**: `trip_documents.extracted_text` added — separate from
+  `extracted_metadata` because it is a document body, not metadata, and
+  the summary queries deliberately don't select it.
+
+**Files changed:**
+
+- `src/modules/trip/document-service.ts` (new)
+- `src/modules/trip/document-extraction.ts` (new)
+- `src/modules/trip/document-fixtures.ts` (new — test-only)
+- `src/modules/trip/document-repository.ts` (transitions + metadata/
+  failure fields, explicit `::"DocumentStatus"` casts)
+- `src/app/api/trips/[id]/documents/route.ts` (new)
+- `src/modules/trip/document-service.test.ts`,
+  `src/modules/trip/document-extraction.test.ts` (new)
+- `prisma/schema.prisma`, `package.json`, `pnpm-lock.yaml`, docs
+
+**Tests:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 176/176 passing (22 files; +17 new: 8 extraction unit
+  tests against a real PDF, 9 service integration tests against real
+  Postgres with the storage boundary mocked)
+- `pnpm build` → succeeded. This surfaced a pre-existing Phase 21 issue
+  the earlier verification pass missed: `/login` and `/register` called
+  `useSearchParams()` without a Suspense boundary, which failed static
+  prerendering. Both were wrapped in Suspense (with the same shell as
+  their fallback) and the build then completed.
+
+**Known limitations:**
+
+- No upload UI yet — the frontend surface on the trip page is the next
+  step (this phase was planned as backend-first).
+- Processing is inline, not queued (Phase 18 owns workers/queues).
+- OCR is not implemented; the pipeline reports that explicitly rather
+  than pretending.
+- The Filestack adapter is still unverified against the live API —
+  sandbox egress doesn't reach filestack.com. Real uploads use the
+  documented mock adapter when `FILESTACK_API_KEY` is unset.
+- pgvector is unavailable in this sandbox's Postgres 14, but Phase 14
+  writes no chunks (that's Phase 15).
+
+**Next phase:** Phase 14 frontend surface (document upload on the trip
+page), then Phase 15 — RAG System.
 
 ---
 

@@ -167,6 +167,13 @@ explainable-AI evidence structure varies by what kind of recommendation
 it is). Everything else is a normal typed column — this is not a
 "JSONB everywhere" schema.
 
+**`trip_documents.extracted_text` (added Phase 14)** is a plain `text`
+column on purpose: the extracted body is document content, not metadata,
+so it does not belong in the JSONB field above. It is also deliberately
+absent from the summary `SELECT` used by the digital twin and document
+list — bodies can be megabytes and those paths never need them. Phase 15
+chunking reads it directly instead of re-parsing originals.
+
 **Numeric types**: `Decimal`, not `Float`, for anything money- or
 rate-like (`currency_snapshots.rate`, `risk_assessments.confidence`,
 `recommendations.confidence`) to avoid floating-point rounding errors.

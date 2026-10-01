@@ -284,6 +284,10 @@ model TripDocument {
   sizeBytes         Int            @map("size_bytes")
   status            DocumentStatus @default(UPLOADED)
   failureReason     String?        @map("failure_reason")
+  /// Full text extracted by the Phase 14 pipeline (PDF text layer). Null
+  /// until extraction succeeds; Phase 15 chunking/embedding reads from
+  /// this rather than re-parsing the original file.
+  extractedText     String?        @map("extracted_text")
   /// Semi-structured, varies by document type (passenger, flight number,
   /// booking reference, etc. per Phase 14) -- a JSONB column is the right
   /// normalization call here, not a rigid table of fixed columns, since

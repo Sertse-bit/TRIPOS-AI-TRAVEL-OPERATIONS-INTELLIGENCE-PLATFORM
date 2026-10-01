@@ -1,12 +1,18 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { Suspense, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, FormMessage, TextField, useAsyncAction } from "@/components/ui";
 
-export default function LoginPage() {
+/**
+ * useSearchParams() forces a client-side bailout during static
+ * prerendering, so it must live under a Suspense boundary — without one,
+ * `next build` fails on this page. The fallback renders the same shell
+ * so the prerendered HTML still looks like the sign-in screen.
+ */
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { busy, message, run } = useAsyncAction();
@@ -76,5 +82,23 @@ export default function LoginPage() {
         <FormMessage message={message} />
       </form>
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell
+          title="Sign in"
+          subtitle="Enter your credentials to open the TripOS command center."
+          footer={null}
+        >
+          <div className="mt-6 h-40" />
+        </AuthShell>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

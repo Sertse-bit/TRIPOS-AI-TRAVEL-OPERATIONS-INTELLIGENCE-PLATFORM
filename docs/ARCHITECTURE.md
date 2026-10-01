@@ -471,3 +471,28 @@ weighted deterministic risk score; it's the simpler precursor Phase 16
 extends, not replaces.
 
 ---
+
+## 16. Document Intelligence (Phase 14)
+
+Section 13's pipeline is now implemented in
+`src/modules/trip/document-service.ts`, with three decisions worth
+recording:
+
+- **Extraction runs inline in the request, not on a queue.** Queue and
+  worker infrastructure is Phase 18's deliverable; pretending it exists
+  earlier would be dishonest architecture. `processTripDocument` is
+  isolated so moving it behind a worker later is wiring, not a rewrite.
+- **A document is READY only when extraction genuinely produced text.**
+  Images (no OCR in this build), text-free scans, and corrupt files all
+  end FAILED with a stored reason. `trip_documents.extracted_text` holds
+  the recovered body; `extracted_metadata` holds deterministic,
+  evidence-backed facts (flight numbers, dates, booking references) —
+  extracted by regex-with-evidence, never guessed by an LLM.
+- **The storage provider stays the Phase 5 swap point.** With
+  `FILESTACK_API_KEY` configured, real Filestack uploads are attempted;
+  without it, the documented mock adapter is used and says so. The
+  sandbox cannot reach filestack.com, so the adapter is tested at the
+  HTTP boundary and service tests mock the provider.
+
+Phase 15 (RAG) reads `trip_documents.extracted_text` to chunk and embed,
+rather than re-parsing the original file.

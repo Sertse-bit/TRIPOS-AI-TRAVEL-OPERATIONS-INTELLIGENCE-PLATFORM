@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, FormMessage, TextField, useAsyncAction } from "@/components/ui";
 
-export default function RegisterPage() {
+/**
+ * Same Suspense requirement as the login page: useSearchParams() bails
+ * out of static prerendering unless a boundary sits above it.
+ */
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { busy, message, run } = useAsyncAction();
@@ -96,5 +100,23 @@ export default function RegisterPage() {
         <FormMessage message={message} />
       </form>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell
+          title="Create account"
+          subtitle="Create a TripOS account to start your trip intelligence board."
+          footer={null}
+        >
+          <div className="mt-6 h-56" />
+        </AuthShell>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

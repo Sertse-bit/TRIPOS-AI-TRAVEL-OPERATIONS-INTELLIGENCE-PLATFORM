@@ -26,8 +26,12 @@ metric.
   Currency (Fixer + ExchangeRate fallback), each recording timestamped,
   append-only snapshots. Documented mock adapters stand in when a
   provider key isn't configured — a real adapter is never faked.
-- **Research agent** — answers only from retrieved, attributed search
-  results, and reports honestly when evidence is thin.
+- **Document intelligence** — upload PDFs or images to a trip
+  (content-sniffed bytes, 10MB cap). PDFs get real text extraction plus
+  evidence-backed metadata (flight numbers, dates, booking references);
+  images are stored honestly as not-text-extracted (no OCR in this
+  build), and nothing is ever marked READY unless extraction actually
+  happened.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, analytics computed from
   your own rows, and a settings page showing real provider availability.
