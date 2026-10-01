@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
 import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-service";
-import { Card, EmptyState, SectionHeading, StatusBadge, tripStatusTone } from "@/components/ui";
+import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
+import { documentStatusTone, tripStatusTone } from "@/components/tone";
 import {
   AddDestinationForm,
   AddFlightForm,
@@ -9,6 +10,7 @@ import {
   CheckFlightStatusButton,
   CheckWeatherButton,
   CurrencyCheckForm,
+  DocumentUploadForm,
   ResearchForm,
   StatusSelect,
 } from "./trip-actions";
@@ -29,6 +31,49 @@ function fmtDateTime(d: Date | string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * The extracted metadata column is JSONB on purpose, so the shape
+ * genuinely varies by document type. This reads the fact lists the
+ * Phase 14 pipeline writes and ignores anything it doesn't recognize,
+ * rather than assuming a fixed structure.
+ */
+interface DocumentFacts {
+  pageCount: number | null;
+  flightNumbers: string[];
+  bookingReferences: string[];
+  dates: string[];
+}
+
+function readDocumentFacts(metadata: Record<string, unknown> | null): DocumentFacts | null {
+  if (!metadata) return null;
+
+  const extraction = metadata.extraction as { pageCount?: unknown } | undefined;
+  const values = (key: string): string[] => {
+    const list = metadata[key];
+    if (!Array.isArray(list)) return [];
+    return list
+      .map((fact) =>
+        typeof fact === "object" && fact !== null && "value" in fact
+          ? String((fact as { value: unknown }).value)
+          : null,
+      )
+      .filter((value): value is string => Boolean(value));
+  };
+
+  return {
+    pageCount: typeof extraction?.pageCount === "number" ? extraction.pageCount : null,
+    flightNumbers: values("flightNumbers"),
+    bookingReferences: values("bookingReferences"),
+    dates: values("dates"),
+  };
+}
+
+function hasFacts(facts: DocumentFacts): boolean {
+  return (
+    facts.flightNumbers.length > 0 || facts.bookingReferences.length > 0 || facts.dates.length > 0
+  );
 }
 
 export default async function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -189,27 +234,53 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
       {/* Documents */}
       <Card className="mt-6">
         <SectionHeading>Documents</SectionHeading>
+        <p className="mt-1.5 text-sm text-sand-600">
+          Uploaded documents are stored through the document storage provider, then text-extracted.
+          A document is only marked READY when extraction genuinely produced text.
+        </p>
+        <DocumentUploadForm tripId={trip.id} />
         {documents.length === 0 ? (
           <EmptyState>
-            <span className="mt-2 block">
-              No documents attached. Uploads land here via the document storage provider.
-            </span>
+            <span className="mt-3 block">No documents attached to this trip yet.</span>
           </EmptyState>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {documents.map((doc) => (
-              <li
-                key={doc.id}
-                className="flex items-center justify-between rounded-lg border border-sand-200 p-3 dark:border-sand-200"
-              >
-                <span className="truncate text-sm font-medium text-navy-950 dark:text-navy-100">
-                  {doc.originalFilename}
-                </span>
-                <span className="flex-none text-xs text-sand-500">
-                  {doc.mimeType} · {(doc.sizeBytes / 1024).toFixed(0)} KB · {doc.status}
-                </span>
-              </li>
-            ))}
+          <ul className="mt-4 space-y-2">
+            {documents.map((doc) => {
+              const facts = readDocumentFacts(doc.extractedMetadata);
+              return (
+                <li
+                  key={doc.id}
+                  className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-navy-950 dark:text-navy-100">
+                        {doc.originalFilename}
+                      </p>
+                      <p className="text-xs text-sand-500">
+                        {doc.mimeType} · {(doc.sizeBytes / 1024).toFixed(0)} KB
+                        {facts?.pageCount ? ` · ${facts.pageCount} page(s)` : ""}
+                      </p>
+                    </div>
+                    <StatusBadge status={doc.status} tone={documentStatusTone(doc.status)} />
+                  </div>
+                  {doc.status === "FAILED" && doc.failureReason && (
+                    <p className="mt-1.5 text-xs text-alert-600">{doc.failureReason}</p>
+                  )}
+                  {doc.status === "READY" && facts && hasFacts(facts) && (
+                    <p className="mt-1.5 text-xs text-sand-600">
+                      {facts.flightNumbers.length > 0 && (
+                        <>Flights {facts.flightNumbers.join(", ")}. </>
+                      )}
+                      {facts.bookingReferences.length > 0 && (
+                        <>Booking ref {facts.bookingReferences.join(", ")}. </>
+                      )}
+                      {facts.dates.length > 0 && <>Dates {facts.dates.join(", ")}.</>}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

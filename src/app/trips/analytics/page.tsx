@@ -1,6 +1,7 @@
 import { requireSession } from "@/app/require-auth";
 import { listUserTrips, getTripDigitalTwin } from "@/modules/trip/trip-service";
-import { Card, SectionHeading, StatusBadge, tripStatusTone } from "@/components/ui";
+import { Card, SectionHeading, StatusBadge } from "@/components/ui";
+import { tripStatusTone } from "@/components/tone";
 
 export default async function AnalyticsPage() {
   const user = await requireSession("/trips/analytics");

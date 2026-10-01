@@ -494,5 +494,16 @@ recording:
   sandbox cannot reach filestack.com, so the adapter is tested at the
   HTTP boundary and service tests mock the provider.
 
+The trip page's document surface follows the Section 5 boundary rule in
+the usual way: a client island posts multipart FormData to the route and
+then calls `router.refresh()`, while the list itself stays server-rendered
+from the trip service. One rendering-boundary rule turned up while wiring
+it up and is worth recording: a server component may **render** an export
+from a `"use client"` module (StatusBadge), but it may not **call** one
+(every export of a client module is a client reference). Pure helpers used
+by both sides therefore live in `src/components/tone.ts`, which carries no
+directive. No static check in this project catches that class of mistake —
+it only shows up as a 500 at request time.
+
 Phase 15 (RAG) reads `trip_documents.extracted_text` to chunk and embed,
 rather than re-parsing the original file.

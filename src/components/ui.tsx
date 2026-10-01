@@ -1,12 +1,19 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import type { Tone } from "@/components/tone";
 
 /* ------------------------------------------------------------------ */
 /* Shared client UI primitives for the TripOS frontend.                */
 /* Server components never import from here — it exists so the         */
 /* interactive islands (forms, selects, buttons) stay consistent.      */
+/*                                                                    */
+/* Note: pure helpers like tripStatusTone() live in components/tone.ts */
+/* instead, because a server component cannot CALL a function exported */
+/* from a "use client" module — only render it. See that file's header.*/
 /* ------------------------------------------------------------------ */
+
+export type { Tone };
 
 // --- API helper (all routes use the { data, requestId } / { error } envelope) ---
 
@@ -137,8 +144,6 @@ export function FormMessage({
 
 // --- Status / tone badges ---
 
-export type Tone = "ok" | "warn" | "alert" | "neutral";
-
 export function StatusBadge({ status, tone }: { status: string; tone: Tone }) {
   const styles = {
     ok: "bg-ok-100 text-ok-700 dark:text-ok-500",
@@ -154,34 +159,6 @@ export function StatusBadge({ status, tone }: { status: string; tone: Tone }) {
       {status}
     </span>
   );
-}
-
-export function tripStatusTone(status: string): Tone {
-  switch (status) {
-    case "ACTIVE":
-    case "COMPLETED":
-      return "ok";
-    case "CANCELLED":
-      return "alert";
-    case "UPCOMING":
-      return "warn";
-    default:
-      return "neutral";
-  }
-}
-
-export function flightStatusTone(status: string): Tone {
-  switch (status) {
-    case "LANDED":
-    case "COMPLETED":
-      return "ok";
-    case "DELAYED":
-      return "warn";
-    case "CANCELLED":
-      return "alert";
-    default:
-      return "neutral";
-  }
 }
 
 // --- Section heading ---

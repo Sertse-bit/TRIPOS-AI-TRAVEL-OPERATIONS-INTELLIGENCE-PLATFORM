@@ -1026,6 +1026,27 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
   DOCUMENT_PROCESSING_FAILED carrying page count or reason.
 - **API**: `POST /api/trips/[id]/documents` (multipart `file` field) and
   `GET /api/trips/[id]/documents`, both through `withApiHandler`.
+- **Frontend surface on the trip page** (the phase's second half): a
+  `DocumentUploadForm` client island posts multipart FormData (deliberately
+  NOT through the JSON `postJson` helper — that sets a Content-Type that
+  would strip the multipart boundary) and reports the real outcome back:
+  page/character counts and extracted facts for READY, the stored failure
+  reason for FAILED. The server-rendered Documents card shows each
+  document's status badge (`documentStatusTone`), failure reason, and the
+  extracted flight numbers / booking references / dates, read defensively
+  from the JSONB metadata column since its shape genuinely varies.
+- **Fixed a pre-existing Phase 21 defect found by live verification**:
+  `components/ui.tsx` is a `"use client"` module, and the three server
+  pages called `tripStatusTone()` imported from it. Every export of a
+  client module is a client reference, so calling one on the server
+  throws "Attempted to call tripStatusTone() from the server" — meaning
+  `/trips`, `/trips/[id]`, and `/trips/analytics` had been returning
+  **500 since Phase 21**. Typecheck, lint, tests, and the production build
+  all passed regardless: this failure only appears at request time. The
+  pure helpers now live in `src/components/tone.ts` (no directive), and
+  the fix was confirmed against the running app — all four trip routes
+  return 200. Worth remembering: nothing in this repo's static checks
+  exercises a server component's render path.
 - **Schema**: `trip_documents.extracted_text` added — separate from
   `extracted_metadata` because it is a document body, not metadata, and
   the summary queries deliberately don't select it.
@@ -1040,6 +1061,8 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 - `src/app/api/trips/[id]/documents/route.ts` (new)
 - `src/modules/trip/document-service.test.ts`,
   `src/modules/trip/document-extraction.test.ts` (new)
+- `src/components/tone.ts` (new), `src/components/ui.tsx`,
+  `src/app/trips/**` (upload island + documents card)
 - `prisma/schema.prisma`, `package.json`, `pnpm-lock.yaml`, docs
 
 **Tests:**
@@ -1057,8 +1080,6 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 **Known limitations:**
 
-- No upload UI yet — the frontend surface on the trip page is the next
-  step (this phase was planned as backend-first).
 - Processing is inline, not queued (Phase 18 owns workers/queues).
 - OCR is not implemented; the pipeline reports that explicitly rather
   than pretending.
@@ -1068,8 +1089,9 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 - pgvector is unavailable in this sandbox's Postgres 14, but Phase 14
   writes no chunks (that's Phase 15).
 
-**Next phase:** Phase 14 frontend surface (document upload on the trip
-page), then Phase 15 — RAG System.
+**Next phase:** Phase 15 — RAG System (chunk and embed
+`trip_documents.extracted_text`, retrieval, and the pgvector
+`document_chunks` writes this schema has been holding open).
 
 ---
 

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
 import { listUserTrips } from "@/modules/trip/trip-service";
-import { Card, StatusBadge, tripStatusTone } from "@/components/ui";
+import { Card, StatusBadge } from "@/components/ui";
+import { tripStatusTone } from "@/components/tone";
 import { NewTripForm } from "./new-trip-form";
 
 export default async function TripsPage() {
