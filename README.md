@@ -10,7 +10,7 @@ metric.
 ## Stack
 
 - **Next.js 16** (App Router, React 19, TypeScript strict)
-- **PostgreSQL** via raw `pg` repositories (Prisma schema in `prisma/`)
+- **PostgreSQL** via raw `pg` repositories (Prisma schema in `prisma/`), with **pgvector** for document embeddings
 - **Redis** (rate limiting, resilience cache)
 - **Anthropic** SDK behind a typed, bounded AI tool layer
 - **Tailwind CSS v4** with a project-specific theme token set
@@ -32,6 +32,11 @@ metric.
   booking references), each shown with the text it was found in; images
   are stored honestly as not-text-extracted (no OCR in this build), and
   nothing is ever marked READY unless extraction actually happened.
+- **RAG retrieval** — extracted document text is chunked deterministically
+  and embedded into a real `pgvector` column, then searched by cosine
+  similarity within the trip. Without a `VOYAGE_API_KEY` it falls back to
+  a local hashing embedder that is genuinely lexical rather than
+  semantic, and says so in every result instead of pretending otherwise.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, analytics computed from
   your own rows, and a settings page showing real provider availability.
@@ -47,6 +52,16 @@ Infra (per `AGENTS.md`):
 service postgresql start
 redis-server --daemonize yes --port 6379
 ```
+
+The database also needs the **pgvector** extension for the RAG phase:
+
+```bash
+psql -d tripos_dev -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+```
+
+If your Postgres doesn't package pgvector, build it from source against
+`postgresql-server-dev-<version>` — see `docs/DATABASE.md` for the exact
+column and index DDL.
 
 Install and configure:
 

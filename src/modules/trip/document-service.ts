@@ -12,6 +12,7 @@ import {
   extractDocumentContent,
   extractDocumentMetadata,
 } from "@/modules/trip/document-extraction";
+import { indexTripDocument } from "@/modules/trip/rag-service";
 import { attachDocumentToTrip, getTrip } from "@/modules/trip/trip-service";
 
 /**
@@ -78,12 +79,13 @@ export async function uploadTripDocument(
     sizeBytes,
   });
 
-  return processTripDocument(document, input.buffer);
+  return processTripDocument(document, input.buffer, userId);
 }
 
 async function processTripDocument(
   document: TripDocumentRecord,
   buffer: Buffer,
+  userId: string,
 ): Promise<TripDocumentRecord> {
   await markDocumentProcessing(document.id);
 
@@ -127,6 +129,19 @@ async function processTripDocument(
       truncated: extraction.truncated,
     },
   });
+
+  // Phase 15: index the extracted text for retrieval. Indexing is layered
+  // on top of a successful extraction, so a failure here must NOT rewrite
+  // an honest READY document as FAILED — the text is already stored and
+  // the document can be (re-)indexed on demand via the index endpoint.
+  try {
+    await indexTripDocument(document.tripId, userId, document.id);
+  } catch (error) {
+    logger.error(
+      { err: error, documentId: document.id },
+      "Automatic document indexing failed; document remains READY and can be re-indexed",
+    );
+  }
 
   return ready;
 }

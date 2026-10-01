@@ -1097,7 +1097,103 @@ PROVIDER_ERROR`. Test data and the server process cleaned up afterward.
 
 ## Phase 15 — RAG System
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **Real vector search, not a simulation.** pgvector was absent from this
+  environment (not packaged for the local Postgres 14), so the extension
+  was built from source, installed, and enabled on both local databases.
+  `document_chunks.embedding` is now a genuine `vector(1024)` column with
+  an HNSW cosine index, and ranking is Postgres's own `<=>` operator.
+  Found the old sandbox workaround (a `text` column standing in for the
+  vector) by checking `pg_extension` before designing anything.
+- **Embedding provider decided and wired** (`src/integrations/embeddings/provider.ts`):
+  Voyage AI's `voyage-3`, which is what the column is now sized to. It
+  sends `input_type: document|query`, batches at 64 inputs, and — the
+  detail that matters most for a retrieval system — rejects a response
+  whose vector count or dimension doesn't match the request rather than
+  letting vectors misalign onto the wrong chunks.
+- **A documented local fallback that is real math, not a fake response.**
+  With no key configured, a feature-hashing embedder computes actual
+  normalized 1024-dimension vectors, so chunking, storage, ranking, and
+  the UI all work end to end offline. It is honestly weaker: similarity
+  is lexical, not semantic, so `semantic: false` is carried on every
+  result and the UI says so in plain language. The project's
+  "documented mock adapter, never simulated success" rule is satisfied
+  without pretending a hash is an embedding model.
+- **Deterministic chunking** (`src/modules/trip/document-chunking.ts`):
+  paragraph → sentence → word boundaries in that order, target 1000
+  chars, hard cap 1400, 150-char overlap so a sentence straddling a
+  boundary is still retrievable. Token counts are documented estimates
+  (~4 chars/token) and never influence a boundary or a ranking.
+- **RAG service** (`src/modules/trip/rag-service.ts`): index a document
+  (chunks → embeds → replaces prior chunks in one transaction, so
+  re-indexing is idempotent rather than duplicating rows) and search a
+  trip's chunks. The trip scope is applied in the same SQL statement as
+  the ranking, not as a separate authorization step a later refactor
+  could reorder or drop.
+- **Honest retrieval outcomes**: chunks come back with the similarity
+  that ranked them, `noEvidence: true` when nothing clears the floor,
+  and the provider's name and semantic flag on every response.
+- **Wiring**: successful extraction now indexes automatically — a
+  _failure_ there is logged and leaves the document honestly READY
+  rather than rewriting it as FAILED, with
+  `POST /api/trips/[id]/documents/[documentId]/index` as the recovery
+  path. `POST /api/trips/[id]/documents/search` serves retrieval, and the
+  trip page gained a search card showing ranked chunks, similarity
+  percentages, and the live indexed-chunk count.
+- **Schema**: `document_chunks.embedding` is `vector(1024)` (was a
+  provisional 1536 placeholder whose own comment said to revisit it in
+  Phase 15), plus an HNSW cosine index created via raw SQL.
+
+**Files changed:**
+
+- `src/integrations/embeddings/provider.ts` (new)
+- `src/modules/trip/document-chunking.ts`,
+  `src/modules/trip/document-chunk-repository.ts`,
+  `src/modules/trip/rag-service.ts` (new)
+- `src/modules/trip/document-repository.ts` (text-loading read path),
+  `src/modules/trip/document-service.ts` (auto-index after extraction)
+- `src/app/api/trips/[id]/documents/search/route.ts`,
+  `src/app/api/trips/[id]/documents/[documentId]/index/route.ts` (new)
+- `src/app/trips/[id]/page.tsx`, `src/app/trips/[id]/trip-actions.tsx`
+  (search surface)
+- `src/config/env.ts` (`VOYAGE_API_KEY` + availability),
+  `prisma/schema.prisma`, docs
+
+**Tests:**
+
+- `pnpm typecheck` → 0 errors
+- `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → 214/214 passing (25 files; +38 new: 9 chunker unit, 15
+  embedding provider, 11 RAG service, 3 new assertions on the upload →
+  auto-index path, 3 more in the provider file's typing)
+- `pnpm build` → succeeded
+- **Live verification against the running app**: registered a user,
+  uploaded a real PDF, confirmed it went READY and was indexed
+  automatically, re-indexed on demand, then searched it — the top hit was
+  the correct chunk at similarity 0.513 via
+  `local-hashing-embedder`, and a gibberish query at a 0.9 floor returned
+  `noEvidence: true` with zero hits. Test data removed afterwards.
+
+**Known limitations:**
+
+- With no `VOYAGE_API_KEY` set, retrieval is lexical, not semantic. The
+  adapter is written against Voyage's documented request/response shape
+  and tested at the HTTP boundary, but the sandbox's network egress
+  cannot reach `api.voyageai.com`, so it has never run against the live
+  API — same caveat as the Filestack adapter in Phase 14.
+- `VOYAGE_API_KEY` was **not** added to `.env.example`: the file tooling
+  in this environment refuses to write any `.env*` file. It needs that
+  one line added by hand.
+- Retrieval returns chunks, not composed answers. Grounding an agent's
+  prose in those chunks (and Voyage's reranking) is Phase 17's job.
+- Re-indexing rewrites all of a document's chunks in a transaction rather
+  than diffing them; fine at this scale, worth revisiting at volume.
+
+**Next phase:** Phase 16 — Risk Engine (weighted deterministic risk
+scoring over flight, weather, schedule, and document completeness).
 
 ---
 

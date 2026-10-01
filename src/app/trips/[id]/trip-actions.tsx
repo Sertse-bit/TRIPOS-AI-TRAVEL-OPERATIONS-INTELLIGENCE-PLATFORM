@@ -548,7 +548,6 @@ export function ResearchForm({ tripId }: { tripId: string }) {
 }
 
 // --- Document upload (Phase 14 pipeline) -----------------------------------
-
 interface UploadedDocument {
   id: string;
   originalFilename: string;
@@ -660,6 +659,113 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
           )}
           {uploaded.status !== "READY" && uploaded.failureReason && (
             <p className="mt-1 text-xs text-alert-600">{uploaded.failureReason}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Document search (Phase 15 RAG) ---------------------------------------
+
+interface SearchHit {
+  documentId: string;
+  originalFilename: string;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}
+
+interface SearchResponse {
+  chunks: SearchHit[];
+  noEvidence: boolean;
+  embeddingProvider: string;
+  semantic: boolean;
+}
+
+/**
+ * Renders retrieved chunks exactly as ranked, including the similarity
+ * that put each one there, and names the embedding provider. When the
+ * provider is the local fallback, that fact is stated in the UI rather
+ * than left for the user to assume.
+ */
+export function DocumentSearchForm({ tripId }: { tripId: string }) {
+  const { busy, message, run } = useAsyncAction();
+  const [result, setResult] = useState<SearchResponse | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const query = String(data.get("query") ?? "").trim();
+    if (!query) return;
+
+    const response = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/documents/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Search failed.");
+      return json.data as SearchResponse;
+    });
+
+    if (response) setResult(response);
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSubmit} className="mt-3 flex flex-wrap items-end gap-3">
+        <label className={`${labelClass} min-w-0 flex-1`}>
+          <span className={fieldLabelClass}>Ask your documents</span>
+          <input
+            name="query"
+            type="text"
+            required
+            maxLength={500}
+            placeholder="e.g. what time does my flight leave?"
+            className={inputClass}
+          />
+        </label>
+        <Button type="submit" disabled={busy}>
+          {busy ? "Searching…" : "Search"}
+        </Button>
+      </form>
+      <FormMessage message={message} />
+      {result && (
+        <div className="mt-3">
+          <p className="text-xs text-sand-500">
+            {result.noEvidence
+              ? "No indexed document content matched this query."
+              : `${result.chunks.length} chunk${result.chunks.length === 1 ? "" : "s"} matched, ranked by cosine similarity.`}
+          </p>
+          {!result.semantic && (
+            <p className="mt-1 text-xs text-warn-700 dark:text-warn-500">
+              Ranked with the local <code>{result.embeddingProvider}</code> fallback — lexical
+              similarity, not semantic. Add a VOYAGE_API_KEY for real embeddings.
+            </p>
+          )}
+          {result.chunks.length > 0 && (
+            <ul className="mt-2 space-y-2">
+              {result.chunks.map((hit) => (
+                <li
+                  key={`${hit.documentId}-${hit.chunkIndex}`}
+                  className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs font-medium text-navy-950 dark:text-navy-100">
+                      {hit.originalFilename} · chunk {hit.chunkIndex + 1}
+                    </span>
+                    <span className="flex-none text-xs text-sand-500">
+                      similarity {(hit.similarity * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-line text-sm text-sand-800 dark:text-sand-700">
+                    {hit.content}
+                  </p>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

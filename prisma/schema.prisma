@@ -304,18 +304,23 @@ model TripDocument {
   @@map("trip_documents")
 }
 
-/// Embedding dimension (1536) is a placeholder pending the actual
-/// embedding model decision in Phase 15 (Anthropic has no native
-/// embeddings endpoint, so a separate embedding provider must be chosen
-/// there). 1536 matches common providers (e.g. OpenAI text-embedding-3-small,
-/// Voyage AI) and keeps this schema realistic rather than an arbitrary
-/// stand-in -- but treat it as provisional, not final, until Phase 15.
+/// Embedding dimension is now decided (Phase 15): Voyage AI's
+/// `voyage-3` model emits 1024-dimension vectors, so the column is
+/// `vector(1024)`. The earlier 1536 placeholder was explicitly
+/// provisional pending exactly this choice, and Anthropic has no
+/// embeddings endpoint, so a separate provider was always required.
+///
+/// The vector index (HNSW / cosine) is created with raw SQL rather than
+/// declared here -- see docs/DATABASE.md for the exact statement. It is
+/// kept out of this file because Prisma's vector-index support could not
+/// be validated in this environment, and shipping schema syntax that was
+/// never executed would trade a real check for a cosmetic one.
 model DocumentChunk {
   id             String                       @id @default(uuid())
   tripDocumentId String                       @map("trip_document_id")
   chunkIndex     Int                          @map("chunk_index")
   content        String
-  embedding      Unsupported("vector(1536)")?
+  embedding      Unsupported("vector(1024)")?
   tokenCount     Int?                         @map("token_count")
   createdAt      DateTime                     @default(now()) @map("created_at")
 

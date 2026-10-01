@@ -507,3 +507,28 @@ it only shows up as a 500 at request time.
 
 Phase 15 (RAG) reads `trip_documents.extracted_text` to chunk and embed,
 rather than re-parsing the original file.
+
+---
+
+## 17. RAG Retrieval (Phase 15)
+
+Section 13's pipeline now ends in real vector search, and three decisions
+from that phase are worth recording:
+
+- **The vector store is Postgres, genuinely.** pgvector was missing in
+  this environment and had to be built from source; `document_chunks`
+  is a real `vector(1024)` column with an HNSW cosine index, and ranking
+  is the `<=>` operator rather than a similarity computed in application
+  code. Nothing here simulates vector search.
+- **The embedding provider's weakness is reported, not smoothed over.**
+  With no `VOYAGE_API_KEY`, retrieval runs on a local feature-hashing
+  embedder that computes real vectors but measures shared vocabulary
+  rather than meaning. Every retrieval result carries the provider name
+  and a `semantic` flag, and the UI states it — the alternative, a
+  quietly degraded search that looks identical to a real one, is exactly
+  the kind of invented capability this project refuses.
+- **Scoping and ranking happen in one statement.** `searchChunksByVector`
+  applies the trip filter in the same SQL that orders by similarity, so
+  a cross-trip leak can't come from a missing or reordered authorization
+  step. Retrieval returns stored chunks with their similarity; composing
+  an answer from them is Phase 17's job, not this layer's.

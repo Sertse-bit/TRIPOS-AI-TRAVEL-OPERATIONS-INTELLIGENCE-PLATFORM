@@ -98,6 +98,32 @@ export async function findDocumentsByTripId(tripId: string): Promise<TripDocumen
   return result.rows.map(mapRow);
 }
 
+export interface TripDocumentWithText extends TripDocumentRecord {
+  extractedText: string | null;
+}
+
+/**
+ * Loads one document together with its extracted body — the only read
+ * path that pulls `extracted_text` (Phase 15 indexing). Scoped by trip id
+ * as well as document id so a document belonging to another trip is
+ * simply not found.
+ */
+export async function findDocumentWithText(
+  tripId: string,
+  documentId: string,
+): Promise<TripDocumentWithText | null> {
+  const result = await pool.query(
+    `SELECT ${SUMMARY_COLUMNS}, extracted_text
+     FROM trip_documents WHERE trip_id = $1 AND id = $2`,
+    [tripId, documentId],
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return { ...mapRow(row), extractedText: row.extracted_text };
+}
+
 /**
  * Status transitions for the extraction pipeline. Each is a single
  * UPDATE ... RETURNING so the caller gets the freshly persisted row

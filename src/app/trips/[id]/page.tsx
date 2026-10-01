@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
 import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-service";
+import { getTripIndexStatus } from "@/modules/trip/rag-service";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
 import { documentStatusTone, tripStatusTone } from "@/components/tone";
 import {
@@ -10,6 +11,7 @@ import {
   CheckFlightStatusButton,
   CheckWeatherButton,
   CurrencyCheckForm,
+  DocumentSearchForm,
   DocumentUploadForm,
   ResearchForm,
   StatusSelect,
@@ -82,6 +84,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
   const twin = await getTripDigitalTwin(id, user.id);
   const events = await getTripEventHistory(id, user.id);
+  const { indexedChunks } = await getTripIndexStatus(id, user.id);
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -283,6 +286,17 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             })}
           </ul>
         )}
+      </Card>
+
+      {/* Document search (Phase 15 RAG) */}
+      <Card className="mt-6">
+        <SectionHeading>Search trip documents</SectionHeading>
+        <p className="mt-1.5 text-sm text-sand-600">
+          {indexedChunks > 0
+            ? `Ranked retrieval over ${indexedChunks} indexed chunk${indexedChunks === 1 ? "" : "s"} from this trip\u2019s documents \u2014 real stored text, ordered by cosine similarity.`
+            : "Nothing indexed yet. Upload a PDF that finishes text extraction and its content is indexed automatically."}
+        </p>
+        <DocumentSearchForm tripId={trip.id} />
       </Card>
 
       {/* Event history */}

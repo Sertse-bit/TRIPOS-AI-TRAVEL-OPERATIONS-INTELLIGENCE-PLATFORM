@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pool } from "@/infrastructure/db";
 import { uploadTripDocument } from "@/modules/trip/document-service";
+import { countDocumentChunks } from "@/modules/trip/document-chunk-repository";
 import { createTrip, getTripDocuments, getTripEventHistory } from "@/modules/trip/trip-service";
 import { buildMinimalPdf, makeMinimalPng } from "@/modules/trip/document-fixtures";
 import { NotFoundError, ProviderError, ValidationError } from "@/shared/errors";
@@ -132,6 +133,10 @@ describe("uploadTripDocument", () => {
     const processed = events.find((event) => event.eventType === "DOCUMENT_PROCESSED");
     expect(processed?.metadata).toMatchObject({ pageCount: 1 });
     expect(events.some((event) => event.eventType === "DOCUMENT_UPLOADED")).toBe(true);
+
+    // Phase 15: a document that finished extraction is indexed for
+    // retrieval automatically, without a separate call.
+    expect(await countDocumentChunks(document.id)).toBeGreaterThan(0);
   });
 
   it("rejects an upload to a trip the user does not own, without storing anything", async () => {

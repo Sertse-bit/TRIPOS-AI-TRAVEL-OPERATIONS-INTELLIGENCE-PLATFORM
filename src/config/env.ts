@@ -28,6 +28,15 @@ const envSchema = z.object({
   // --- AI ---
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
+  // --- Embeddings (Phase 15 RAG) ---
+  // Voyage AI supplies the text embeddings for document chunk vectors.
+  // Anthropic has no embeddings endpoint, so a separate provider is
+  // genuinely required rather than optional convenience — but it is
+  // still schema-optional so the app boots and every non-RAG feature
+  // works without it (see the mock adapter in
+  // src/integrations/embeddings/provider.ts).
+  VOYAGE_API_KEY: z.string().optional(),
+
   // --- External providers (all optional at the schema level: the
   // integration layer decides per-provider whether to run in mock mode
   // when a key is absent — see docs/ARCHITECTURE.md Section 6/Phase 5) ---
@@ -80,6 +89,7 @@ export const providerAvailability = {
   ipstack: Boolean(env.IPSTACK_API_KEY),
   numverify: Boolean(env.NUMVERIFY_API_KEY),
   zenserp: Boolean(env.ZENSERP_API_KEY),
+  voyage: Boolean(env.VOYAGE_API_KEY),
   filestack: Boolean(env.FILESTACK_API_KEY),
   screenshotlayer: Boolean(env.SCREENSHOTLAYER_API_KEY),
   mailboxlayer: Boolean(env.MAILBOXLAYER_API_KEY),

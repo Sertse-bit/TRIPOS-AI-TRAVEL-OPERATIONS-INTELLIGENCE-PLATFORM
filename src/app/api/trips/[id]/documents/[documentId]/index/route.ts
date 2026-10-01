@@ -1,0 +1,27 @@
+import { withApiHandler, type RouteContext } from "@/shared/api-response";
+import { requireAuth } from "@/modules/auth/access-control";
+import { indexTripDocument } from "@/modules/trip/rag-service";
+
+/**
+ * Re-indexes one document on demand: chunks its extracted text and
+ * stores one vector per chunk. Idempotent, and the recovery path when
+ * automatic indexing at upload time failed or the embedding model
+ * changed.
+ */
+export const POST = withApiHandler(async (_requestId, log, _request, context: RouteContext) => {
+  const user = await requireAuth();
+  const { id, documentId } = await context.params;
+
+  const result = await indexTripDocument(id, user.id, documentId);
+  log.info(
+    {
+      tripId: id,
+      documentId,
+      chunks: result.chunks,
+      embeddingProvider: result.embeddingProvider,
+      semantic: result.semantic,
+    },
+    "Trip document indexed",
+  );
+  return result;
+});

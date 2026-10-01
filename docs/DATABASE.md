@@ -181,11 +181,32 @@ rate-like (`currency_snapshots.rate`, `risk_assessments.confidence`,
 application layer in Phase 16, not a DB constraint yet — noted as a
 known gap below).
 
-**`document_chunks.embedding` is `vector(1536)`**, a placeholder pending
-the actual embedding model decision in Phase 15 (Anthropic has no native
-embeddings endpoint, so a separate provider must be chosen there). 1536
-matches common providers so the schema is realistic rather than an
-arbitrary stand-in, but treat the dimension as provisional.
+**`document_chunks.embedding` is `vector(1024)`** — decided in Phase 15.
+The earlier `vector(1536)` was explicitly provisional pending an embedding
+model choice, and that choice is now made: Voyage AI's `voyage-3` model
+emits 1024-dimension vectors. Anthropic has no embeddings endpoint at all,
+so a separate provider was always required. The dimension is enforced by
+Postgres, not TypeScript, so `EMBEDDING_DIMENSIONS` in
+`src/integrations/embeddings/provider.ts` and this column must be changed
+together.
+
+**pgvector is now a hard requirement, and it is a real one.** Phase 15
+builds the extension from source in this environment (it is not packaged
+for the local Postgres 14) and applies it to both local databases:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE document_chunks
+  ALTER COLUMN embedding TYPE vector(1024);
+CREATE INDEX document_chunks_embedding_idx
+  ON document_chunks USING hnsw (embedding vector_cosine_ops);
+```
+
+The HNSW index is created with raw SQL rather than declared in
+`schema.prisma` on purpose: Prisma's vector-index support could not be
+validated in this environment, and committing schema syntax that was
+never executed would trade a real check for a cosmetic one. The note above
+about this environment materializing DDL by hand applies here too.
 
 **Passport numbers** (`travelers.passport_number`) are stored as plain
 text for now. This is flagged, not silently accepted: real passport data
