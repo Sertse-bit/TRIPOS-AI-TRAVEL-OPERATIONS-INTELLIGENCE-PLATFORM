@@ -36,6 +36,14 @@ export interface CurrencyProvider extends ExternalProvider {
 //    gateway (HTTP 401 "Invalid authentication credentials"). The first
 //    version of this adapter used the gateway because APILayer's docs
 //    point there; live evidence overruled it.
+//
+//    One live caveat, observed 2026-10-02: this Fixer tier only allows
+//    EUR as the base, answering HTTP 400
+//    `base_currency_access_restricted` for anything else (e.g. USD→EUR).
+//    That is not an adapter bug and is NOT swallowed — it surfaces as a
+//    real ProviderError, and the Phase 6 resilient wrapper fails over to
+//    CurrencyLayer, which returned the rate. Both halves of the
+//    dual-vendor design were exercised live because of this.
 //  - The second credential (`EXCHANGERATE_API_KEY`) is a **CurrencyLayer**
 //    key, not an `exchangerates_data` one: the APILayer gateway returns
 //    401 for it, exchangerate-api.com's v6 reports `invalid-key`, and

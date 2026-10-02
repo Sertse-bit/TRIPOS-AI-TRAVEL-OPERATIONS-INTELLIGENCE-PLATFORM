@@ -1745,7 +1745,11 @@ COMPLETED."`
   first time this build could call providers with real credentials:
   - **Fixer** was pointed at APILayer's gateway, which returns **401**
     for this credential; `data.fixer.io/api/latest?access_key=` returns
-    **200** with real rates. Re-pointed.
+    **200** with real rates — but only with EUR as base (this tier
+    answers 400 `base_currency_access_restricted` otherwise). Re-pointed;
+    the non-EUR case surfaced as a real `ProviderError` and the Phase 6
+    resilient wrapper failed over to CurrencyLayer, so both halves of
+    the dual-vendor design were proven live, not just in tests.
   - **`EXCHANGERATE_API_KEY` is a CurrencyLayer credential**, not an
     `exchangerates_data` one (gateway 401, exchangerate-api v6
     `invalid-key`, `api.currencylayer.com/live` 200). The adapter now
@@ -1816,10 +1820,13 @@ typecheck clean; `pnpm build` clean with all new routes:**
   15 EUR + 100 USD, the status reported exact per-currency totals, a
   converted total of **104.03 EUR**, 395.97 remaining, the USD line's
   real rate (0.89033) and its `rateAsOf` timestamp, and rate 1 with
-  `rateAsOf: null` for the EUR line. Before the Fixer fix the same
-  request returned `converted: null` with
-  `"fixer responded with HTTP 401"` — the honest failure path, observed
-  live, not just in a test.
+  `rateAsOf: null` for the EUR line. The structured logs show how that
+  number was obtained honestly: Fixer refused the non-EUR base with its
+  documented 400 `base_currency_access_restricted`, and
+  `Primary provider failed; fallback succeeded` — the CurrencyLayer
+  fallback supplied the rate. Before the Fixer fix the same request
+  returned `converted: null` with `"fixer responded with HTTP 401"` —
+  the honest failure path, observed live, not just in a test.
 - **Weatherstack live**: a real snapshot recorded through the app (24 °C,
   Overcast, 4 kph, 0 mm) — the mock adapter is no longer in play for
   this provider.
