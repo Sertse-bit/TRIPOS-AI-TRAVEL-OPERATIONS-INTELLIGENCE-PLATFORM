@@ -416,4 +416,51 @@ describe("monitorTrip", () => {
     const { trip } = await tripWithFlight();
     await expect(monitorTrip(trip.id, otherId)).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  // --- Phase 19: the caller's own floor on being interrupted ---------------
+  //
+  // The scenario is deliberately a HIGH, not a CRITICAL: a weather shift
+  // from an ordinary 8 kph to 60 kph moves this fixture's score 26 -> 38,
+  // which crosses MEDIUM -> HIGH (a materially changed situation) without
+  // a cancelled flight, so "do not interrupt me below X" has something
+  // real to suppress.
+
+  it("does not notify below the caller's severity floor, but still records the assessment", async () => {
+    const { trip } = await tripWithFlight();
+    await monitorTrip(trip.id, ownerId);
+    providerState({ weatherWind: 60 });
+
+    const result = await monitorTrip(trip.id, ownerId, { minimumAlertSeverity: "CRITICAL" });
+
+    expect(result.riskChange!.severity).toBe("HIGH");
+    expect(result.riskChange!.severityChanged).toBe(true);
+    // The change is real, the record is real — only the interruption was
+    // declined, and that is reported as its own outcome rather than as
+    // "nothing happened".
+    expect(result.alert).toBeNull();
+    expect(result.alertSuppressed).toBe(true);
+    expect(result.alertSuppressionReason).toBe("below-threshold");
+    expect(await countUnreadNotifications(ownerId)).toBe(0);
+
+    const stored = await pool.query<{ severity: string; risk_score: number }>(
+      `SELECT severity::text AS severity, risk_score
+         FROM risk_assessments WHERE trip_id = $1
+        ORDER BY generated_at DESC LIMIT 1`,
+      [trip.id],
+    );
+    expect(stored.rows[0].severity).toBe("HIGH");
+  });
+
+  it("notifies when the change is at or above the floor", async () => {
+    const { trip } = await tripWithFlight();
+    await monitorTrip(trip.id, ownerId);
+    providerState({ weatherWind: 60 });
+
+    const result = await monitorTrip(trip.id, ownerId, { minimumAlertSeverity: "HIGH" });
+
+    expect(result.riskChange!.severity).toBe("HIGH");
+    expect(result.alert).not.toBeNull();
+    expect(result.alertSuppressionReason).toBeNull();
+    expect(await countUnreadNotifications(ownerId)).toBe(1);
+  });
 });

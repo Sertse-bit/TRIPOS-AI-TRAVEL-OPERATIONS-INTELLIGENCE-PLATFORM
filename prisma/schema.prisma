@@ -145,6 +145,7 @@ model Trip {
   riskAssessments   RiskAssessment[]
   recommendations   Recommendation[]
   events            TripEvent[]
+  watch             TripWatch?
 
   @@index([userId])
   @@map("trips")
@@ -415,6 +416,42 @@ model Notification {
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+/// Trip Watch's scheduling state (Phase 19). One row per watched trip.
+///
+/// Kept in its own table rather than as columns on Trip for the same
+/// reason the snapshot tables are separate: this is state about the
+/// *watching*, not about the trip, and an unwatched trip simply has no
+/// row here (no nullable "is it watched" column to interpret).
+///
+/// `last_run_at` / `last_error` / `next_run_at` are the whole of the
+/// scheduler's memory, and they are exactly what the sweep reports —
+/// nothing about a pass is inferred or reconstructed after the fact.
+model TripWatch {
+  id               String       @id @default(uuid())
+  tripId           String       @unique @map("trip_id")
+  enabled          Boolean      @default(true)
+  /// Cadence. Bounded in the service (5..1440 minutes) and by a CHECK
+  /// constraint applied with the table, so no code path can schedule a
+  /// paid provider poll every second.
+  intervalMinutes  Int          @default(60) @map("interval_minutes")
+  /// Don't interrupt the traveler below this severity. MEDIUM is the
+  /// default and is behaviour-preserving: a meaningful change cannot
+  /// occur while the score is still in LOW.
+  alertMinSeverity RiskSeverity @default(MEDIUM) @map("alert_min_severity")
+  lastRunAt        DateTime?    @map("last_run_at")
+  /// The failure of the most recent pass, cleared by the next success.
+  lastError        String?      @map("last_error")
+  nextRunAt        DateTime     @default(now()) @map("next_run_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  /// The sweep's own access path: "which enabled watches are due?"
+  @@index([enabled, nextRunAt])
+  @@map("trip_watches")
 }
 
 model AuditLog {

@@ -55,11 +55,23 @@ metric.
   genuinely changes. A failed check is reported as failed, never as
   unchanged, and repeated passes over an unchanged trip stay silent:
   dedupe is enforced by a unique index, not a racy read-then-write.
+- **Trip Watch** — automatic monitoring on a cadence you choose: 5–1440
+  minutes per trip, opt-in, with an alert floor ("only interrupt me at
+  CRITICAL"). A sweep claims each due watch atomically, so two sweeps
+  racing (a scheduler and a button click) still produce exactly one
+  provider pass; a failed pass is recorded and retried on the next
+  cadence instead of hot-looping, and a trip that reaches COMPLETED or
+  CANCELLED stops being watched with a `WATCH_PAUSED` event explaining
+  why. The sweep is exposed as `POST /api/watches` (caller-scoped) and
+  the service is scheduler-safe — see `docs/BUILD_PROGRESS.md` for why
+  no worker process exists yet.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, a risk card showing
   every factor's points and the real values behind them, saved
-  recommendations, a notifications inbox, analytics computed from your
-  own rows, and a settings page showing real provider availability.
+  recommendations, a notifications inbox, a Trip Watch console at
+  `/trips/watches` (every watch's real next/last run state, including its
+  last failure, plus a due-check sweep), analytics computed from your own
+  rows, and a settings page showing real provider availability.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.
@@ -81,7 +93,9 @@ psql -d tripos_dev -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 
 If your Postgres doesn't package pgvector, build it from source against
 `postgresql-server-dev-<version>` — see `docs/DATABASE.md` for the exact
-column and index DDL.
+column and index DDL, including the `trip_watches` table the Trip Watch
+phase adds (also committed as executable DDL in
+`prisma/sql/phase-19-trip-watch.sql`).
 
 Install and configure:
 

@@ -4,6 +4,7 @@ import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-ser
 import { getTripIndexStatus } from "@/modules/trip/rag-service";
 import { getLatestTripRisk } from "@/modules/risk/risk-service";
 import { listTripRecommendations } from "@/modules/risk/recommendation-service";
+import { getTripWatch } from "@/modules/monitor/watch-service";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
 import {
   documentStatusTone,
@@ -25,6 +26,7 @@ import {
   ResearchForm,
   RunMonitorButton,
   StatusSelect,
+  TripWatchCard,
 } from "./trip-actions";
 import { OperationalStateBanner } from "./operational-state-banner";
 
@@ -133,6 +135,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const { indexedChunks } = await getTripIndexStatus(id, user.id);
   const latestRisk = await getLatestTripRisk(id, user.id);
   const recommendations = await listTripRecommendations(id, user.id);
+  const watch = await getTripWatch(id, user.id);
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -391,15 +394,39 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="mt-5 border-t border-sand-200 pt-4 dark:border-sand-200">
-          <SectionHeading>Monitor this trip</SectionHeading>
+          <SectionHeading>Trip Watch</SectionHeading>
           <p className="mt-1.5 text-sm text-sand-600">
-            Re-checks every flight and destination against its provider, recomputes risk, and alerts
-            you only when the risk genuinely changes. Repeated checks on an unchanged trip stay
-            silent.
+            A monitoring pass re-checks every flight and destination against its provider,
+            recomputes risk, and alerts you only when the risk genuinely changes. Watching a trip
+            runs that pass automatically on the cadence you choose; repeated checks on an unchanged
+            trip stay silent.
           </p>
-          <div className="mt-3">
+          <TripWatchCard
+            tripId={trip.id}
+            dueNow={watch?.due ?? false}
+            watch={
+              watch
+                ? {
+                    enabled: watch.enabled,
+                    intervalMinutes: watch.intervalMinutes,
+                    alertMinSeverity: watch.alertMinSeverity,
+                    lastRunAt: watch.lastRunAt ? watch.lastRunAt.toISOString() : null,
+                    lastError: watch.lastError,
+                    nextRunAt: watch.nextRunAt.toISOString(),
+                  }
+                : null
+            }
+          />
+          <div className="mt-4">
             <RunMonitorButton tripId={trip.id} />
           </div>
+          <p className="mt-3 text-xs text-sand-400">
+            The button above always runs one pass now. Automatic checks are listed on the{" "}
+            <Link href="/trips/watches" className="underline underline-offset-2">
+              Trip Watch page
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="mt-5 border-t border-sand-200 pt-4 dark:border-sand-200">

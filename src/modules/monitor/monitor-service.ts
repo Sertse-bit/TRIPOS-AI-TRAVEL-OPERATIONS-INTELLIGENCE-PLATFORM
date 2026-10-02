@@ -68,6 +68,18 @@ export interface MonitoredDestinationResult {
   error?: string;
 }
 
+/**
+ * Why a real, meaningful change produced no notification.
+ *
+ * `already-reported` is Phase 18's dedupe gate. `below-threshold` is
+ * Phase 19's preference: the traveler asked not to be interrupted below
+ * a severity, and that instruction is being honoured — which is a
+ * different thing from the monitor being silent, and is reported as
+ * such so the UI can't present "you asked not to be told" as "nothing
+ * happened".
+ */
+export type AlertSuppressionReason = "already-reported" | "below-threshold";
+
 export interface MonitorRunResult {
   tripId: string;
   checkedFlights: MonitoredFlightResult[];
@@ -75,8 +87,23 @@ export interface MonitorRunResult {
   flightsChanged: number;
   riskChange: RiskChange | null;
   alert: { id: string; title: string } | null;
-  /** True when a real change happened but the alert was already sent. */
+  /** True when a real change happened but no notification was written. */
   alertSuppressed: boolean;
+  /** Why it was suppressed; null when nothing was suppressed. */
+  alertSuppressionReason: AlertSuppressionReason | null;
+}
+
+export interface MonitorOptions {
+  /**
+   * Don't notify below this severity — Trip Watch's stored preference,
+   * passed in by the sweep. Omitted means no floor at all, which is
+   * exactly Phase 18's behaviour, so existing callers are unaffected.
+   *
+   * This is a floor on *notification*, never on surveillance: the pass
+   * still checks everything and still records the risk assessment. It
+   * only decides whether to interrupt someone.
+   */
+  minimumAlertSeverity?: RiskSeverity;
 }
 
 /**
@@ -113,7 +140,11 @@ export function isMeaningfulRiskChange(change: {
  * would mark a broken check as a healthy one, which is the most
  * dangerous possible lie for a monitor to tell.
  */
-export async function monitorTrip(tripId: string, ownerId: string): Promise<MonitorRunResult> {
+export async function monitorTrip(
+  tripId: string,
+  ownerId: string,
+  options: MonitorOptions = {},
+): Promise<MonitorRunResult> {
   const [flightsBefore, twin] = await Promise.all([
     getTripFlightStatuses(tripId, ownerId),
     getTripDigitalTwin(tripId, ownerId),
@@ -205,6 +236,7 @@ export async function monitorTrip(tripId: string, ownerId: string): Promise<Moni
       riskChange,
       alert: null,
       alertSuppressed: false,
+      alertSuppressionReason: null,
     };
   }
 
@@ -217,6 +249,25 @@ export async function monitorTrip(tripId: string, ownerId: string): Promise<Moni
     severityChanged &&
     order(assessed.assessment.severity) >
       order(previousRisk?.severity ?? assessed.assessment.severity);
+
+  // Phase 19: the traveler's own floor on being interrupted. Checked
+  // *after* the change test, so "below threshold" can never be reported
+  // for a change that did not happen.
+  if (
+    options.minimumAlertSeverity !== undefined &&
+    order(assessed.assessment.severity) < order(options.minimumAlertSeverity)
+  ) {
+    return {
+      tripId,
+      checkedFlights,
+      checkedDestinations,
+      flightsChanged: checkedFlights.filter((flight) => flight.changed).length,
+      riskChange,
+      alert: null,
+      alertSuppressed: true,
+      alertSuppressionReason: "below-threshold",
+    };
+  }
 
   const outcome = await createDeduplicatedNotification({
     userId: ownerId,
@@ -245,6 +296,7 @@ export async function monitorTrip(tripId: string, ownerId: string): Promise<Moni
       ? { id: outcome.notification.id, title: outcome.notification.title }
       : null,
     alertSuppressed: outcome.suppressed,
+    alertSuppressionReason: outcome.suppressed ? "already-reported" : null,
   };
 }
 

@@ -527,6 +527,13 @@ export async function emitTripEvent(
     entityType: string;
     entityId: string;
     metadata?: Record<string, unknown>;
+    /**
+     * Only meaningful for fact-shaped events ("the trip is finished, so
+     * watching stopped") where re-emitting the same statement must be a
+     * safe no-op. User-initiated actions leave it unset and get a
+     * fresh key, since two genuine clicks are two real events.
+     */
+    dedupeKey?: string;
   },
 ): Promise<TripEventRecord> {
   await requireOwnedTrip(tripId, userId);

@@ -248,7 +248,7 @@ Example: a flight status change propagating to a user-visible alert.
 
 ```mermaid
 flowchart LR
-    A[Trip Watch scheduled job] --> B[Flight Agent fetches status]
+    A[Trip Watch scheduled job\nPhase 19: runDueWatches()] --> B[Flight Agent fetches status]
     B --> C{State changed vs
 last snapshot?}
     C -- No --> Z[No-op, idempotent]
@@ -685,3 +685,66 @@ monitorTrip(tripId, ownerId)
   `notifications.trip_event_id` existed with no writer; the event is now
   inserted first and the notification references it, which is the order
   the schema implies.
+
+---
+
+## 21. Trip Watch (Phase 19)
+
+Section 9's chain begins with "Trip Watch scheduled job" and Section 20
+built everything after it. This phase builds the scheduling itself — and
+only that, because Phase 18's monitor is already the pass worth
+scheduling.
+
+```text
+runDueWatches({ ownerId? , now? , limit? })
+  │
+  ├─ SELECT enabled watches WHERE next_run_at <= COALESCE($now, now())   [ JOIN trips ]
+  │
+  └─ for each candidate, sequentially:
+       UPDATE trip_watches SET next_run_at = now() + interval
+        WHERE trip_id = $1 AND enabled AND next_run_at <= now()
+       │
+       ├─ 0 rows  → someone else claimed it → "already-claimed", nothing runs
+       └─ 1 row   → trip COMPLETED/CANCELLED ? disable watch + WATCH_PAUSED
+                                  : monitorTrip(tripId, ownerId, { minimumAlertSeverity })
+                                       ├─ ok      → last_run_at, last_error = null
+                                       └─ throws  → last_error, next attempt one interval out
+```
+
+- **Claim-then-run is the whole design.** A "check if due, then run"
+  sweep is a race with a shape that looks like a guarantee and is not.
+  Advancing `next_run_at` in the same `UPDATE` that reads it means the
+  database decides who runs the pass, and a duplicate sweep is a no-op
+  rather than a duplicate set of provider calls. Tested by racing two
+  real sweeps against the real database, not asserted from the code's
+  shape.
+- **One clock, and it is Postgres's.** `next_run_at` is written with
+  `now()`; reading it into a JavaScript `Date` truncates microseconds
+  _downwards_, so a watch created microseconds earlier can compare as
+  not-yet-due against a clock that is nominally the same. The first
+  version of this phase did that and flaked under parallel test load.
+  Every comparison now happens inside SQL via
+  `COALESCE($n::timestamptz, now())`, with the injectable `now` kept for
+  tests moving time forward.
+- **A watch is the only thing that makes monitoring automatic.** No trip
+  is watched implicitly, so no provider spend happens because a trip
+  exists. Enabling (or re-enabling) a watch makes it due immediately — a
+  "start watching" control that does nothing for an hour reads as
+  broken; every pass after that schedules one full interval out.
+- **Being interrupted is the traveller's decision, not the monitor's.**
+  `alert_min_severity` is a floor on notification only: the pass still
+  checks everything and still stores the assessment, and the result
+  reports `below-threshold` separately from `already-reported`. That
+  distinction is why "you asked not to be told" can never render as
+  "nothing happened". The default `MEDIUM` is behaviour-preserving,
+  because a meaningful change cannot occur while the score is still LOW.
+- **A finished trip stops being watched, and says so.** COMPLETED and
+  CANCELLED trips have no live flights or weather; the sweep disables
+  the watch and appends one `WATCH_PAUSED` event to the trip's own
+  history, deduped on the fact itself. Polling a finished trip forever
+  would be provider spend with no possible information in it.
+- **Still no worker, and the honest reason is unchanged.** A durable
+  queue needs a long-running process a route handler is not. What this
+  phase establishes is that the dispatch layer is safe to call from
+  anywhere, any number of times, so adding a scheduler changes _who
+  calls it_, not what happens.

@@ -28,10 +28,16 @@ function mapRow(row: {
 }
 
 /**
- * Basic create only — no throttling or dedup logic here. Phase 19 (Trip
- * Watch) is explicitly responsible for "avoid notification spam" at the
- * point where notifications are triggered by repeated automated checks;
- * this repository just needs to persist one correctly when asked.
+ * Basic create only — no throttling or dedup logic here, by design:
+ * this repository persists one notification correctly when asked, and
+ * the *policy* about when asking is warranted lives one layer up.
+ *
+ * That policy now exists. Phase 18's
+ * `modules/notification/notification-service.ts` gates automated alerts
+ * on a UNIQUE dedupe key, and Phase 19's Trip Watch decides *when* a
+ * pass runs at all (with a per-trip severity floor). Anything writing a
+ * notification for a condition that can repeat — i.e. anything a
+ * schedule can trigger — should go through that service, not here.
  */
 export async function createNotification(input: {
   userId: string;

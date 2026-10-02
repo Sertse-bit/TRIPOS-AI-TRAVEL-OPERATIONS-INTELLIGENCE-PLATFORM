@@ -1497,7 +1497,143 @@ top of this monitor).
 
 ## Phase 19 — Trip Watch
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **Scheduling, on top of Phase 18's monitor rather than a second copy of
+  it.** `src/modules/monitor/watch-service.ts` owns exactly one new
+  question — _when_ a pass should happen — and calls the existing
+  `monitorTrip()` unchanged (one new option, below). Trip Watch stores
+  which trips are watched, the cadence, and the interruption threshold;
+  Phase 18's dedupe gate still decides whether an alert is a duplicate.
+- **New `trip_watches` table** (one row per watched trip, unique on
+  `trip_id`) holding `enabled`, `interval_minutes`, `alert_min_severity`,
+  `last_run_at`, `last_error`, and `next_run_at`. `prisma/schema.prisma`
+  gained the `TripWatch` model, and the hand-applied DDL (the sandbox
+  still cannot run `prisma migrate` — Phase 3's constraint) is committed
+  verbatim in `prisma/sql/phase-19-trip-watch.sql` and was executed
+  against both the dev and test databases before a line of TypeScript
+  was written against it.
+- **Claim-then-run, in one statement.** A sweep never does "is it due?
+  then run it". It advances `next_run_at` with an `UPDATE ... WHERE
+enabled AND next_run_at <= now()` and runs the pass only if that
+  statement actually returned a row. Two racing sweeps therefore produce
+  exactly one pass per due watch because Postgres decides the winner —
+  tested by running two real sweeps concurrently against the real
+  database.
+- **One clock.** `next_run_at` is written with Postgres's `now()`
+  (microsecond precision). Comparing it to a JavaScript `Date` truncates
+  the microseconds _downwards_, so a watch created microseconds earlier
+  can compare as "not yet due" — a genuine flake this phase's tests
+  caught, not a theoretical one. Every due/take query now compares with
+  `COALESCE($n::timestamptz, now())`; the injectable `now` exists for
+  tests to move time forward, not to be the default path.
+- **A pass that fails is recorded, not retried forever.** The claim
+  already advanced the schedule, so a failure writes `last_error` and
+  lets the next attempt happen one interval later; a subsequent success
+  clears it. A failed pass is `outcome: "failed"`, never a silent
+  success — the same rule Phase 18 applies per provider call.
+- **Watching stops when the trip does.** A COMPLETED or CANCELLED trip
+  has nothing live to watch, so the sweep disables that watch, records a
+  `WATCH_PAUSED` event in the trip's own history (deduped on the fact
+  itself), and reports `outcome: "finished"`.
+- **Preferences, not a second alerting rule.** `alert_min_severity` is a
+  floor on _notification_ only: the pass still checks everything and
+  still stores the assessment, and the result distinguishes
+  `"below-threshold"` from `"already-reported"` so "you asked not to be
+  told" can never be rendered as "nothing happened". `MEDIUM` is the
+  default and is behaviour-preserving — a meaningful change cannot occur
+  while the score is still in LOW.
+- **Cadence bounds 5..1440 minutes**, enforced in the service _and_ by a
+  CHECK constraint on the table, since a cadence of 0 would be a tight
+  loop against paid provider APIs.
+- **API**: `GET|PUT /api/trips/[id]/watch`, `GET|POST /api/watches`
+  (list + due count, and the sweep). The sweep is scoped to the
+  authenticated caller on purpose: a global sweep would spend other
+  travellers' provider quota. The ownerless form of `runDueWatches()`
+  exists for a real scheduler and is deliberately not reachable over
+  HTTP. **UI**: a Trip Watch panel on the trip page (cadence, alert
+  floor, start/pause, plus last-run and last-failure state) and a new
+  `/trips/watches` console showing every watch with the scheduler's own
+  state and a "run due checks now" sweep. The notifications page is now
+  linked from the nav too (it existed since Phase 18 but was unreachable
+  by clicking).
+- **No BullMQ worker, still.** Same documented omission as Phase 18, for
+  the same reason: a durable queue needs a long-running process a route
+  handler is not. What changed is that the dispatch layer is now safe to
+  call from anywhere, any number of times, so a real scheduler is a
+  one-line change rather than a redesign.
+
+**Schema/DDL:** `prisma/sql/phase-19-trip-watch.sql` (applied to
+`tripos_dev` and `tripos_test`), `prisma/schema.prisma` (`TripWatch` +
+`Trip.watch`).
+
+**Tests — 18 new, 300 total across 30 files, all passing:**
+
+- `src/modules/monitor/watch-service.test.ts` (16): defaults and due-now
+  on create; partial updates not clobbering other preferences;
+  re-enabling making a watch due again; cadence bounds accepted/rejected;
+  a stranger's trip returning the same `NotFoundError` as a missing one;
+  listing only the caller's watches; a due watch running and rescheduling
+  exactly one cadence out; paused and not-yet-due watches not running; two
+  concurrent sweeps producing exactly one real provider pass; a failed
+  pass recorded in `last_error` and not retried immediately; a later
+  success clearing it (clock injected, no sleeping); the alert floor
+  suppressing the notification while the assessment is still stored;
+  at-or-above the floor notifying; a finished trip's watch being disabled
+  with a deduped `WATCH_PAUSED` event; user-scoped sweeps not touching
+  another user's watch; and work beyond the sweep limit reported as
+  `stillDue` rather than silently dropped.
+- `src/modules/monitor/monitor-service.test.ts` (+2): the severity floor
+  suppressing a real MEDIUM → HIGH escalation without suppressing the
+  stored assessment, and the same escalation notifying when it is at or
+  above the floor.
+
+**Live verification (preview, real Postgres/Redis):**
+
+- Created a watch through the real API: `due: true` immediately, cadence
+  15 minutes, floor CRITICAL. `PUT {"intervalMinutes": 1}` returned a
+  clean `400 VALIDATION_ERROR` naming the 5..1440 bound.
+- The sweep ran the pass once and advanced `next_run_at` to exactly one
+  cadence after `last_run_at` (08:58:12.923 → 09:13:12.545). A second
+  sweep ran nothing (`passes: 0, stillDue: 0`).
+- Pausing stopped the sweep; marking the trip COMPLETED and resuming the
+  watch produced `outcome: "finished"`, auto-disabled the watch, and
+  wrote one `WATCH_PAUSED` event with `reason: "Trip status is
+COMPLETED."`
+- A second real user got `404 NOT_FOUND` for both `GET` and `PUT` on the
+  first user's watch and saw zero watches of their own.
+- `/trips/watches` rendered `200` with the real watch state, and the trip
+  page renders the Trip Watch panel.
+- All smoke users deleted afterwards; `users`, `trips`, `trip_watches`,
+  `trip_events`, `risk_assessments`, `notifications`,
+  `flight_status_snapshots` and `weather_snapshots` are all back to zero,
+  and `trip_watches` in the test database is zero too.
+
+**Known limits (stated, not hidden):**
+
+- **Provider calls in the live check above ran the documented mock
+  adapters, and the smoke output says so.** `aviationstack` and
+  `weatherstack` report `configured: false` in this workspace's
+  `/api/health`, so the sweep's flight/weather checks resolved to the
+  mock adapters that Phase 5 documented — never to invented data, and
+  the response shape makes it visible (`providerName: test-…` in the
+  pinned tests, `SCHEDULED`/"clear" from the mock in the live run).
+  Switching to the real adapters is a key, not a code change.
+- **Nothing runs on a timer yet.** The sweep is invoked by an
+  authenticated request (or by an operator calling `runDueWatches()`
+  server-side). A cron/worker is a deployment concern — Phase 30/31 — and
+  the service was built to be safe for it rather than pretending to be
+  it.
+- A sweep processes at most `DEFAULT_SWEEP_LIMIT` (5) watches per call
+  and reports the remainder as `stillDue`, so a request cannot be turned
+  into an unbounded amount of provider spend.
+- The CHECK constraint on `interval_minutes` cannot be expressed in
+  `prisma/schema.prisma`, so a migration generated from the schema alone
+  would not recreate it — noted in `docs/DATABASE.md`.
+
+**Next phase:** Phase 20 — AI Itinerary Planner.
 
 ---
 

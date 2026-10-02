@@ -26,6 +26,18 @@ export default async function TripsLayout({ children }: { children: React.ReactN
               Trips
             </Link>
             <Link
+              href="/trips/watches"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
+            >
+              Watch
+            </Link>
+            <Link
+              href="/trips/notifications"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
+            >
+              Alerts
+            </Link>
+            <Link
               href="/trips/analytics"
               className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
             >

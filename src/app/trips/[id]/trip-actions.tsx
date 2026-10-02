@@ -679,6 +679,8 @@ interface MonitorResponse {
   } | null;
   alert: { title: string } | null;
   alertSuppressed: boolean;
+  /** "already-reported" | "below-threshold" | null (Phase 19). */
+  alertSuppressionReason: string | null;
 }
 
 /**
@@ -717,9 +719,11 @@ export function RunMonitorButton({ tripId }: { tripId: string }) {
           <p className="text-navy-950 dark:text-navy-100">
             {result.alert
               ? `Alert raised: ${result.alert.title}`
-              : result.alertSuppressed
-                ? "Risk changed, but this condition was already reported — no duplicate alert."
-                : "No meaningful change. No alert raised."}
+              : result.alertSuppressionReason === "below-threshold"
+                ? "Risk changed, but below your alert threshold — nothing sent."
+                : result.alertSuppressed
+                  ? "Risk changed, but this condition was already reported — no duplicate alert."
+                  : "No meaningful change. No alert raised."}
           </p>
           {result.riskChange && (
             <p className="mt-1 text-xs text-sand-600">
@@ -731,6 +735,241 @@ export function RunMonitorButton({ tripId }: { tripId: string }) {
             Checked {result.checkedFlights.length} flight(s)
             {result.flightsChanged > 0 ? `, ${result.flightsChanged} changed` : ""}.
             {skipped > 0 && ` ${skipped} check(s) failed — reported as failed, not as unchanged.`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Trip Watch (Phase 19) ---------------------------------------------
+
+const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+const INTERVALS = [
+  { minutes: 15, label: "Every 15 minutes" },
+  { minutes: 60, label: "Hourly" },
+  { minutes: 360, label: "Every 6 hours" },
+  { minutes: 1440, label: "Daily" },
+];
+
+const selectClass =
+  "h-9 rounded-md border border-sand-300 bg-white px-3 text-sm font-medium outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50";
+
+/**
+ * Serializable view of a watch, passed down from the server component.
+ * Dates are ISO strings so the island never has to guess at a locale-
+ * dependent `Date` serialization.
+ */
+export interface WatchView {
+  enabled: boolean;
+  intervalMinutes: number;
+  alertMinSeverity: string;
+  lastRunAt: string | null;
+  lastError: string | null;
+  nextRunAt: string;
+}
+
+/**
+ * Watch controls for one trip.
+ *
+ * The two preferences are deliberately separate from the "run a check
+ * now" button above: cadence and interruption threshold are things a
+ * traveler sets once, not actions. Saving them is one PUT with only the
+ * changed fields, matching the service's partial-update contract.
+ */
+export function TripWatchCard({
+  tripId,
+  watch,
+  dueNow,
+}: {
+  tripId: string;
+  watch: WatchView | null;
+  /** Computed by the server component — reading the clock during render is not pure. */
+  dueNow: boolean;
+}) {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [intervalMinutes, setIntervalMinutes] = useState(watch?.intervalMinutes ?? 60);
+  const [alertMinSeverity, setAlertMinSeverity] = useState(watch?.alertMinSeverity ?? "MEDIUM");
+
+  async function save(next: { enabled?: boolean }) {
+    const result = await run(async () => {
+      const res = await fetch(`/api/trips/${tripId}/watch`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intervalMinutes, alertMinSeverity, ...next }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Failed to save.");
+      return json.data as { watch: WatchView };
+    });
+    if (result) router.refresh();
+  }
+
+  const due = dueNow && watch?.enabled;
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-sand-700 dark:text-sand-600">
+          <span>Cadence</span>
+          <select
+            value={intervalMinutes}
+            disabled={busy}
+            onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+            className={selectClass}
+          >
+            {INTERVALS.map((option) => (
+              <option key={option.minutes} value={option.minutes}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-sand-700 dark:text-sand-600">
+          <span>Only alert me at</span>
+          <select
+            value={alertMinSeverity}
+            disabled={busy}
+            onChange={(event) => setAlertMinSeverity(event.target.value)}
+            className={selectClass}
+          >
+            {SEVERITIES.map((severity) => (
+              <option key={severity} value={severity}>
+                {severity} or worse
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {watch?.enabled ? (
+          <>
+            <Button onClick={() => save({})} disabled={busy} variant="secondary">
+              {busy ? "Saving…" : "Save"}
+            </Button>
+            <Button onClick={() => save({ enabled: false })} disabled={busy} variant="secondary">
+              Pause watch
+            </Button>
+          </>
+        ) : (
+          <Button onClick={() => save({ enabled: true })} disabled={busy}>
+            {busy ? "Starting…" : watch ? "Resume watch" : "Watch this trip"}
+          </Button>
+        )}
+      </div>
+
+      <FormMessage message={message} />
+
+      {watch?.enabled ? (
+        <p className="text-xs text-sand-500">
+          Watching{" "}
+          {INTERVALS.find((o) => o.minutes === watch.intervalMinutes)?.label ??
+            `every ${watch.intervalMinutes} minutes`}
+          {" · "}
+          {due
+            ? "a check is due now — run due checks on the Trip Watch page"
+            : `next check due ${new Date(watch.nextRunAt).toLocaleString()}`}
+          {watch.lastRunAt ? ` · last checked ${new Date(watch.lastRunAt).toLocaleString()}` : ""}
+        </p>
+      ) : (
+        <p className="text-xs text-sand-500">
+          Not watched. Automatic checks only run for trips you watch; the button above always runs
+          one on demand.
+        </p>
+      )}
+
+      {watch?.lastError && (
+        <p className="text-xs text-alert-600">
+          The last automatic check failed: {watch.lastError}. It will try again on the next cadence
+          — a failed check is never reported as an unchanged one.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- Trip Watch sweep (Phase 19) ----------------------------------------
+
+interface SweepPass {
+  tripId: string;
+  tripTitle: string;
+  outcome: "ran" | "failed" | "finished" | "already-claimed";
+  error: string | null;
+  monitor: { alert: { title: string } | null; alertSuppressionReason: string | null } | null;
+}
+
+interface SweepResponse {
+  passes: SweepPass[];
+  alertsRaised: number;
+  failed: number;
+  finished: number;
+  stillDue: number;
+}
+
+function describePass(pass: SweepPass): string {
+  if (pass.outcome === "failed") return "check failed — recorded, will retry next cadence";
+  if (pass.outcome === "finished") return "trip finished — watching stopped";
+  if (pass.outcome === "already-claimed") return "another sweep took this one";
+  if (pass.monitor?.alert) return `alert raised: ${pass.monitor.alert.title}`;
+  if (pass.monitor?.alertSuppressionReason === "below-threshold")
+    return "risk moved, but below your alert threshold — nothing sent";
+  if (pass.monitor?.alertSuppressionReason === "already-reported")
+    return "risk moved, already reported — no duplicate alert";
+  return "checked — no meaningful change";
+}
+
+/**
+ * Runs every watch that is due, right now, and reports each outcome
+ * separately. "Ran, nothing to report" and "failed" must never look the
+ * same — that distinction is the whole reason this is a list and not a
+ * single success banner.
+ */
+export function RunDueWatchesButton() {
+  const router = useRouter();
+  const { busy, message, run } = useAsyncAction();
+  const [result, setResult] = useState<SweepResponse | null>(null);
+
+  async function handleClick() {
+    const response = await run(async () => {
+      const res = await fetch("/api/watches", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error?.message ?? "Sweep failed.");
+      return json.data as SweepResponse;
+    });
+    if (response) {
+      setResult(response);
+      router.refresh();
+    }
+  }
+
+  return (
+    <div>
+      <Button onClick={handleClick} disabled={busy}>
+        {busy ? "Checking…" : "Run due checks now"}
+      </Button>
+      <FormMessage message={message} />
+      {result && (
+        <div className="mt-3 rounded-md border border-sand-200 p-3 text-sm dark:border-sand-200">
+          {result.passes.length === 0 ? (
+            <p className="text-navy-950 dark:text-navy-100">
+              Nothing was due. Watches run on their own cadence.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {result.passes.map((pass) => (
+                <li key={pass.tripId} className="text-sm">
+                  <span className="font-medium text-navy-950 dark:text-navy-100">
+                    {pass.tripTitle}
+                  </span>{" "}
+                  <span className="text-sand-600">— {describePass(pass)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-xs text-sand-500">
+            {result.alertsRaised} alert(s) raised · {result.failed} failed · {result.finished}{" "}
+            finished
+            {result.stillDue > 0 && ` · ${result.stillDue} still due`}
           </p>
         </div>
       )}

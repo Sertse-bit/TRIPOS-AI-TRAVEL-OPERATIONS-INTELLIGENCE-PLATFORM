@@ -213,6 +213,48 @@ text for now. This is flagged, not silently accepted: real passport data
 needs encryption-at-rest and access auditing before this schema should
 hold anything real. Tracked as a Phase 4 (Security Foundation) item.
 
+### Phase 19 — `trip_watches` (Trip Watch scheduling)
+
+One row per watched trip, created by
+`modules/monitor/watch-service.ts`. Committed as executable DDL in
+`prisma/sql/phase-19-trip-watch.sql` and applied by hand to both the dev
+and test databases, exactly as Phase 3's original schema was:
+
+```sql
+CREATE TABLE trip_watches (
+  id                text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  trip_id           text NOT NULL UNIQUE REFERENCES trips (id) ON DELETE CASCADE,
+  enabled           boolean NOT NULL DEFAULT true,
+  interval_minutes  integer NOT NULL DEFAULT 60,
+  alert_min_severity "RiskSeverity" NOT NULL DEFAULT 'MEDIUM',
+  last_run_at       timestamptz,
+  last_error        text,
+  next_run_at       timestamptz NOT NULL DEFAULT now(),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT trip_watches_interval_bounds CHECK (interval_minutes BETWEEN 5 AND 1440)
+);
+CREATE INDEX trip_watches_due_idx ON trip_watches (enabled, next_run_at);
+```
+
+Design notes worth recording:
+
+- **Why a table and not columns on `trips`.** This is state about the
+  _watching_, not about the trip, and an unwatched trip simply has no row
+  — no nullable "is it watched" column whose NULL has to be interpreted.
+  It cascades with the trip, so deleting a trip cannot orphan a
+  scheduler entry.
+- **`next_run_at` is the scheduler's whole memory**, and it is written by
+  Postgres (`now()`), never by the Node process. The sweep's due-ness
+  comparisons stay inside SQL for the same reason — see Section 21 of
+  `docs/ARCHITECTURE.md` for the microsecond-truncation bug that made
+  this a requirement rather than a preference.
+- **The CHECK constraint is deliberate and is the one exception** to this
+  schema's "range validation lives in the application" habit. A cadence
+  of 0 or a negative number schedules a tight loop of _paid_ provider
+  calls, so it is worth a constraint no application path can bypass. The
+  cost is stated below.
+
 ## Known gaps (honest, not hidden)
 
 - **Raw SQL against enum columns needs an explicit cast** (e.g.
@@ -238,3 +280,9 @@ hold anything real. Tracked as a Phase 4 (Security Foundation) item.
   `prisma/migrations/` directory exists yet. The first real migration
   will be generated the first time this runs in an environment with
   normal internet access.
+- `trip_watches`'s `CHECK (interval_minutes BETWEEN 5 AND 1440)` cannot be
+  expressed in `prisma/schema.prisma`, so a migration generated from the
+  schema alone would recreate the table without it. The service validates
+  the same bounds, so behaviour stays correct either way — but the extra
+  database-level guarantee would need re-adding by hand. Noted here
+  rather than assumed away.
