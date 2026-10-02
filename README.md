@@ -65,6 +65,20 @@ metric.
   why. The sweep is exposed as `POST /api/watches` (caller-scoped) and
   the service is scheduler-safe — see `docs/BUILD_PROGRESS.md` for why
   no worker process exists yet.
+- **Itinerary & budget** — a day-by-day plan per trip with
+  deterministic budget validation: recorded costs are totalled per
+  currency, converted to the trip's cap through the live FX providers
+  with every rate and its timestamp shown, and items with no recorded
+  cost are counted as such instead of being silently treated as zero
+  (one unavailable rate withholds the converted total entirely rather
+  than presenting a partial sum). The **planning agent** composes
+  schedules from the trip's real dates, destinations, weather, search
+  results, and documents — but every date and city is checked in code
+  against the trip before anything is persisted, the agent has no write
+  tool and no cost field in its output schema (a model cannot invent a
+  price by construction), and re-planning replaces only its own previous
+  items. Without an `ANTHROPIC_API_KEY` the planner says so plainly
+  while everything deterministic stays available.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, a risk card showing
   every factor's points and the real values behind them, saved
@@ -95,7 +109,9 @@ If your Postgres doesn't package pgvector, build it from source against
 `postgresql-server-dev-<version>` — see `docs/DATABASE.md` for the exact
 column and index DDL, including the `trip_watches` table the Trip Watch
 phase adds (also committed as executable DDL in
-`prisma/sql/phase-19-trip-watch.sql`).
+`prisma/sql/phase-19-trip-watch.sql`) and the `itinerary_items` table
+plus trip budget columns from
+`prisma/sql/phase-20-itinerary-planner.sql`.
 
 Install and configure:
 

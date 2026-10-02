@@ -1,9 +1,9 @@
 # TripOS — AI Architecture
 
-## Status: Phase 9 (AI Orchestrator) Complete
+## Status: Phase 20 (AI Itinerary Planner) Complete — all 7 specialized agents built
 
-This document covers the AI tool layer and orchestrator. It will grow
-further with the specialized agents (Phases 10–13, 16–17, 20).
+This document covers the AI tool layer, the orchestrator, and the
+specialized agents (Phases 10–13, 16–17, 20) built on top of it.
 
 ## The core security principle
 
@@ -65,27 +65,39 @@ exceptions" principle as `withApiHandler` (Phase 2), applied here because
 tool results may eventually be shown back to the model or logged
 elsewhere, not just returned to an HTTP client.
 
-## The 10 tools, and their honest scope
+## The 13 tools, and their honest scope
 
-| Tool                    | What it actually does                                                                                                                     | What it deliberately doesn't do yet                                                                                                                                                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_trip`              | Returns the full digital twin (Phase 7)                                                                                                   | —                                                                                                                                                                                                                                                                          |
-| `get_trip_documents`    | Lists attached document metadata                                                                                                          | Return document _content_ — that's `search_trip_knowledge`, once Phase 15 exists                                                                                                                                                                                           |
-| `get_flight_status`     | Live status via the resilient Aviation provider (Phase 5/6), for a flight that must already belong to the given trip                      | Persist a new snapshot or compare it to the previous one — that's Phase 10's Flight Agent                                                                                                                                                                                  |
-| `get_weather`           | Live conditions via the resilient Weather provider, for a destination on the given trip                                                   | Persist a snapshot — Phase 11's job                                                                                                                                                                                                                                        |
-| `get_currency_rate`     | Live rate via the resilient, dual-vendor Currency provider                                                                                | —                                                                                                                                                                                                                                                                          |
-| `search_destination`    | Web search via Zenserp, returns titles/URLs/snippets                                                                                      | Present results as verified fact without a source — that discipline belongs to Phase 13's Research Agent when it composes an answer from this tool's output                                                                                                                |
-| `search_trip_knowledge` | Honestly reports whether documents exist and whether any have finished processing                                                         | Any actual retrieval — there is no embedding pipeline yet (Phase 15). Returns `{status: "no_documents"}` or `{status: "not_yet_processed"}`, never a fabricated match                                                                                                      |
-| `calculate_budget`      | A real, deterministic currency conversion (the multiplication happens in code, never asked of the model)                                  | Estimate a full trip cost — there's no flight/hotel/activity price data model yet. That's Phase 20's job once one exists                                                                                                                                                   |
-| `create_recommendation` | Persists a real row matching Phase 17's four-part structure (Decision/Evidence/Reasoning/Recommendation) with a bounds-checked confidence | Generate the recommendation's content itself — an agent (Phase 9+) decides what to say; this tool only validates and persists it                                                                                                                                           |
-| `create_alert`          | Persists exactly one notification when called                                                                                             | Any throttling or dedup. The automated paths now have both (Phase 18 dedupe key, Phase 19 scheduling), but this tool still writes directly through `createNotification`, so an agent calling it repeatedly would bypass that gate — a known footgun, not a documented mock |
+| Tool                    | What it actually does                                                                                                                                           | What it deliberately doesn't do yet                                                                                                                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_trip`              | Returns the full digital twin (Phase 7)                                                                                                                         | —                                                                                                                                                                                                                                                                          |
+| `get_trip_documents`    | Lists attached document metadata                                                                                                                                | Return document _content_ — that's `search_trip_knowledge`, once Phase 15 exists                                                                                                                                                                                           |
+| `get_flight_status`     | Live status via the resilient Aviation provider (Phase 5/6), for a flight that must already belong to the given trip                                            | Persist a new snapshot or compare it to the previous one — that's Phase 10's Flight Agent                                                                                                                                                                                  |
+| `get_weather`           | Live conditions via the resilient Weather provider, for a destination on the given trip                                                                         | Persist a snapshot — Phase 11's job                                                                                                                                                                                                                                        |
+| `get_currency_rate`     | Live rate via the resilient, dual-vendor Currency provider                                                                                                      | —                                                                                                                                                                                                                                                                          |
+| `search_destination`    | Web search via Zenserp, returns titles/URLs/snippets                                                                                                            | Present results as verified fact without a source — that discipline belongs to Phase 13's Research Agent when it composes an answer from this tool's output                                                                                                                |
+| `search_trip_knowledge` | Honestly reports whether documents exist and whether any have finished processing                                                                               | Any actual retrieval — there is no embedding pipeline yet (Phase 15). Returns `{status: "no_documents"}` or `{status: "not_yet_processed"}`, never a fabricated match                                                                                                      |
+| `calculate_budget`      | A real, deterministic currency conversion (the multiplication happens in code, never asked of the model)                                                        | Estimate a full trip cost from market prices. Phase 20 deliberately still doesn't: costs are the traveler's recorded input (there is no flight/hotel/activity price feed), and budget validation sums those real numbers instead of inventing any                          |
+| `create_recommendation` | Persists a real row matching Phase 17's four-part structure (Decision/Evidence/Reasoning/Recommendation) with a bounds-checked confidence                       | Generate the recommendation's content itself — an agent (Phase 9+) decides what to say; this tool only validates and persists it                                                                                                                                           |
+| `get_trip_risk`         | The stored deterministic assessment (score, severity, factors, confidence)                                                                                      | Computing a score — Phase 16 owns that, and this only reads it                                                                                                                                                                                                             |
+| `get_trip_risk_history` | Past assessments for the same trip                                                                                                                              | —                                                                                                                                                                                                                                                                          |
+| `get_trip_itinerary`    | The trip's stored day-by-day items plus the **deterministic** budget status (per-currency totals, cap, converted total, or an explicit reason it's unavailable) | Writing anything. The planner proposes; the caller persists after grounding (Phase 20)                                                                                                                                                                                     |
+| `create_alert`          | Persists exactly one notification when called                                                                                                                   | Any throttling or dedup. The automated paths now have both (Phase 18 dedupe key, Phase 19 scheduling), but this tool still writes directly through `createNotification`, so an agent calling it repeatedly would bypass that gate — a known footgun, not a documented mock |
 
 Every tool is trip-scoped (takes a `tripId`, checks ownership) for a
-uniform authorization model, even `get_currency_rate` and
-`calculate_budget`, where the underlying data isn't inherently private —
-consistency across all 10 tools matters more here than optimizing away
-an ownership check on the two where it's technically not required for
-privacy.
+uniform authorization model, even `get_currency_rate` and `calculate_budget`,
+where the underlying data isn't inherently private — consistency across all
+13 tools matters more here than optimizing away an ownership check on the
+two where it's technically not required for privacy.
+
+### The Planning Agent gets no write tool (Phase 20)
+
+It is the only agent whose output is _persisted_ rather than returned, so
+it is also the one with the narrowest tool set: five reads. Everything it
+could ever do to the database goes through `groundPlanItems()` →
+`replaceGeneratedPlan()` in its caller, after the output has been checked
+against the trip's real dates and destinations. Persistence-by-tool in
+the middle of reasoning would mean a half-validated plan already in the
+table when the check failed.
 
 ## What's deferred to Phase 9
 
@@ -366,7 +378,53 @@ though: with no real key configured at all, the actual `@anthropic-ai/sdk`
 client throws a specific, real error — "Could not resolve authentication
 method" — _before_ attempting any network call. That propagated
 correctly through the orchestrator's own error handling as `API_ERROR`,
-through `runResearchAgentForUser` as a clean `ProviderError`, out to the
-client as a structured `502` with the full stack trace confined to the
-server log only — the Phase 2 "never leak internals" principle holding
+through `runResearchAgentForUser` as a clean `ProviderError`, out tothe client as a structured `502` with the full stack trace confined to
+the server log only — the Phase 2 "never leak internals" principle holding
 all the way through the deepest pipeline built so far.
+
+## The Planning Agent (Phase 20)
+
+`src/ai/agents/planning-agent.ts` is the seventh and last specialized
+agent, and the third that runs in Phase 9's orchestrator. Composing a
+day-by-day schedule from a trip's real dates, destinations, weather,
+search results, and uploaded documents is synthesis — but it is also the
+one agent whose output is **written to the database**, which is exactly
+why it has the narrowest tool set (five reads, no write tool at all) and
+the most code-level checks around it.
+
+### Three enforced invariants
+
+1. **No cost fields exist in its output schema.** Not "don't write a
+   price" in a prompt — there is no key for one to be written to. A test
+   asserts `z.toJSONSchema(planningAgent.outputSchema)` contains no
+   `cost`/`price`/`currency` token. Costs are the traveler's own input,
+   validated deterministically by `budget-service.ts`.
+2. **Every day and every city is checked before anything persists.**
+   `groundPlanItems()` validates against the trip's stored dates and its
+   real destination rows; an unknown city, an out-of-range date, a
+   duplicated day, or an item that ends before it starts rejects the
+   whole plan with a specific message. Half a plan is not a plan.
+3. **Persistence is the caller's job.** The wrapper (`runPlanningAgentForUser`)
+   grounds first, then calls `replaceGeneratedPlan()`, which swaps the
+   trip's AI-generated rows in one transaction and leaves traveler-entered
+   items alone.
+
+### Authorization runs before the model does
+
+Same pattern as the Research and Risk agents: ownership is checked up
+front, and the trip's dates and destinations are pre-fetched into the
+request message so the model doesn't spend one of its 8 tool-call budget
+learning where the trip goes. A trip with no dates or no destinations is
+refused _before_ an LLM call, with a message saying what to set.
+
+### Verification status
+
+No `ANTHROPIC_API_KEY` exists in this sandbox (11 other provider keys
+were supplied and wired in Phase 20; Anthropic was not among them), so —
+like Phases 9/13/17 — every test mocks only the Anthropic boundary while
+the grounding, authorization, registry, and Postgres underneath are
+genuinely real. What Phase 20 could verify live, it did: the refusal
+path returns a structured `502 PROVIDER_ERROR` naming the missing key
+(observed against the running preview), and the deterministic half of
+the feature (manual items, day-range validation, real FX budget
+validation) ran end to end against real providers.

@@ -50,6 +50,12 @@ explicit stop-and-approve checkpoint.
 - **Unmapped:** `MARKETSTACK_API_KEY` (stock market data) has no identified
   use case in TripOS. Left unused pending a real justification, per the
   "no dependencies without justification" rule.
+- **Wired 2026-10-02 (Phase 20):** all 11 keys are now written to this
+  workspace's `.env.local` through `freebuff-env set` (values never
+  printed or logged) and confirmed by `/api/health` reporting each
+  provider `configured: true`. `ANTHROPIC_API_KEY` is still not among
+  them. Live verification outcomes are in Phase 20's entry and in
+  `docs/INTEGRATIONS.md`.
 - **Sandbox constraint:** this build environment's network egress is
   allowlisted to package registries and GitHub only; third-party provider
   domains (weatherstack.com, aviationstack.com, etc.) are blocked
@@ -381,9 +387,10 @@ endpoints), passport-number encryption-at-rest outstanding.
   error — exactly what `docs/SECURITY.md`'s known-gaps section said would
   happen "once Phase 5 lands."
 
-**Verification methodology:** this sandbox's network egress doesn't reach
-any vendor domain (same constraint as Postgres/Redis tooling, Phase 3),
-so no adapter could be smoke-tested live. Instead:
+**Verification methodology:** at the time this phase ran, this sandbox's
+network egress didn't reach any vendor domain (same constraint as
+Postgres/Redis tooling, Phase 3), so no adapter could be smoke-tested
+live. Instead:
 
 - **Aviationstack, Weatherstack, Fixer/ExchangeRate** response shapes
   were verified against multiple independent, dated public sources via
@@ -394,6 +401,14 @@ so no adapter could be smoke-tested live. Instead:
   `api.apilayer.com/<product>` gateway with an `apikey` header, distinct
   from the legacy `data.fixer.io?access_key=` convention most tutorials
   still show.
+  **Superseded 2026-10-02 (Phase 20):** calling the live endpoints with
+  this project's real keys disproved the gateway finding —
+  `api.apilayer.com/fixer` returns **401** for this credential while
+  `data.fixer.io/api/latest?access_key=` returns **200**, and
+  `EXCHANGERATE_API_KEY` turned out to be a **CurrencyLayer** credential
+  rather than an `exchangerates_data` one. Both adapters were re-pointed
+  and their endpoints pinned by regression tests; `docs/INTEGRATIONS.md`
+  now carries the per-provider live status.
 - **Zenserp, Filestack, IPstack, Numverify, Mailboxlayer** are built from
   training knowledge, explicitly flagged in code comments and
   `docs/INTEGRATIONS.md` as not verified this session — re-check before
@@ -1639,7 +1654,215 @@ COMPLETED."`
 
 ## Phase 20 — AI Itinerary Planner
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **The seventh and last specialized agent.** `src/ai/agents/planning-agent.ts`
+  is an `AgentDefinition` run through Phase 9's orchestrator — a
+  synthesis task with no deterministic formula behind it, unlike the
+  Flight/Weather/Currency agents, so it genuinely belongs in the LLM
+  loop. Its allowed tools are five **reads** (`get_trip`,
+  `get_trip_itinerary`, `get_weather`, `search_destination`,
+  `search_trip_knowledge`): the model proposes a schedule and has no
+  write path at all.
+- **Grounding is enforced in code, not in the prompt.**
+  `groundPlanItems()` rejects any day outside the trip's stored dates,
+  any city that isn't one of the trip's own destinations, two entries
+  for the same day, and an item that ends before it starts — and
+  **one violation rejects the entire plan** rather than persisting the
+  rest and dropping what didn't fit. Destination ids are resolved from
+  the trip's real rows, never from anything the model produced.
+- **The output schema has no cost fields at all.** The strongest form of
+  "never invent a price": `planningOutputSchema` validated through
+  `z.toJSONSchema()` contains no `cost`/`price`/`currency` key, asserted
+  by a test. A fabricated figure cannot reach the database even
+  accidentally; costs are the traveler's own input.
+- **Two writers that can't clobber each other.** `source USER` rows are
+  created through the item API and are never touched by a re-plan;
+  `source AI_PLANNER` rows are written by `replaceGeneratedPlan()`,
+  which deletes the trip's previous AI rows and inserts the new run's
+  in **one transaction** (`BEGIN`/`COMMIT`/`ROLLBACK` in the
+  repository). `plan_run_id` groups a run's rows so the replacement is
+  auditable after the fact.
+- **Deterministic budget validation** (`src/modules/itinerary/budget-service.ts`),
+  no model involved:
+  - per-currency totals are pure sums of stored values, always exact,
+    no provider call;
+  - items with no recorded cost are counted (`itemsWithoutCost`) and
+    **never treated as zero** — that would be a fabricated metric;
+  - the converted total exists only when _every_ rate resolves. One
+    unavailable rate means `converted: null` + a named
+    `conversionError`, never a partial sum presented as "the total";
+  - rates are fetched once per distinct currency (one lookup for ten
+    AED-priced items), and each converted line carries its rate and
+    `rateAsOf`, or `rateAsOf: null` for same-currency lines where no
+    rate was fetched.
+- **New `itinerary_items` table** (day `date`, `HH:MM` times, type enum,
+  optional destination FK, optional cost+currency pair, source, plan
+  run) plus `trips.budget_amount` / `trips.budget_currency`. CHECK
+  constraints enforce what SQL enforces well: time format, cost and
+  currency present together, cost non-negative, budget cap set or
+  cleared as a pair. Hand-applied DDL (Phase 3's sandbox constraint
+  still applies) committed as `prisma/sql/phase-20-itinerary-planner.sql`
+  and executed against **both** `tripos_dev` and `tripos_test` before
+  any TypeScript touched the tables.
+- **Calendar days stay calendar days.** `itinerary_day` is selected with
+  an explicit `::text` cast instead of letting node-postgres parse a
+  `date` into a JS `Date` — formatting that back can land on the
+  previous/next day depending on server timezone, which for a
+  day-by-day plan is a correctness bug, not a cosmetic one.
+- **New tool `get_trip_itinerary`** (the registry's 13th, read-only): it
+  returns the real stored items and the deterministic budget status, so
+  the planner _sees_ the budget position instead of computing one, and
+  plans on top of what already exists rather than duplicating it.
+  Registry test updated — the exhaustive tool list is the security
+  boundary, so it stays asserted.
+- **API** (all through `withApiHandler`): `GET|POST
+/api/trips/[id]/itinerary`, `PATCH|DELETE
+/api/trips/[id]/itinerary/[itemId]`, `POST
+/api/trips/[id]/itinerary/plan`, `PUT|DELETE
+/api/trips/[id]/budget`. Update accepts explicit `null`s so a wrong
+  cost or time can be cleared — distinct from omitting a field, which
+  leaves it alone.
+- **UI**: a new `/trips/[id]/itinerary` page (day timeline with gaps
+  rendered as gaps, per-item cost/source badge, add & delete items, a
+  budget card showing totals per currency + converted total/overspend
+  - the rates used, and a generate-plan button that shows the planner's
+    rationale and assumptions after a run), linked from a new card on the
+    trip page. The planner button is hidden with an explanation when no
+    Anthropic key exists rather than offering a click that can only fail.
+- **Provider credentials wired (11 keys).** `ZENSERP`, `IPSTACK`,
+  `MARKETSTACK`, `WEATHERSTACK`, `NUMVERIFY`, `FIXER`, `AVIATIONSTACK`,
+  `FILESTACK`, `SCREENSHOTLAYER`, `EXCHANGERATE`, `MAILBOXLAYER` were
+  written to `.env.local` via `freebuff-env set` and confirmed through
+  `/api/health`, which now reports every one of them `configured: true`
+  (`anthropic` remains `false` — no key was supplied for it).
+  `MARKETSTACK_API_KEY` is stored but still intentionally unmapped to
+  any feature, and Screenshotlayer has no adapter, both per
+  `.env.example`'s rule.
+- **Live adapter verification found and fixed two real bugs** — the
+  first time this build could call providers with real credentials:
+  - **Fixer** was pointed at APILayer's gateway, which returns **401**
+    for this credential; `data.fixer.io/api/latest?access_key=` returns
+    **200** with real rates. Re-pointed.
+  - **`EXCHANGERATE_API_KEY` is a CurrencyLayer credential**, not an
+    `exchangerates_data` one (gateway 401, exchangerate-api v6
+    `invalid-key`, `api.currencylayer.com/live` 200). The adapter now
+    targets CurrencyLayer and parses its `source`/`quotes{"EURUSD"}`
+    shape, which differs from Fixer's.
+  - **Filestack** required a `handle` field the real API doesn't return
+    (`{url, size, type, filename}`) — every real upload would have been
+    rejected as malformed _after_ the bytes were stored successfully.
+    `storageKey` now derives from the URL's handle segment.
+  - Confirmed working as-is: **Weatherstack** (real snapshot recorded),
+    **Zenserp**, **Aviationstack**, **IPstack**, **Numverify**,
+    **Mailboxlayer**, **Filestack** (after the fix).
+    Each corrected endpoint is now pinned by a regression test, and
+    `docs/INTEGRATIONS.md` carries the per-provider live status.
+
+**Schema/DDL:** `prisma/sql/phase-20-itinerary-planner.sql` (applied to
+both databases), `prisma/schema.prisma` (`ItineraryItemType`,
+`ItineraryItemSource`, `ItineraryItem`, `Trip.budgetAmount` /
+`Trip.budgetCurrency`).
+
+**Tests — 41 new, 341 total across 33 files, all passing; lint and
+typecheck clean; `pnpm build` clean with all new routes:**
+
+- `src/modules/itinerary/itinerary-service.test.ts` (19): persist/round
+  trip of an item; the `ITINERARY_ITEM_ADDED`/`REMOVED` events; days
+  before/after the trip rejected; backwards times rejected; a
+  destination from another trip rejected; a non-owner rejected; clearing
+  a cost with explicit nulls while leaving other fields alone; moving an
+  item outside the trip rejected; cross-trip item ids rejected; budget
+  status with no cap (exact totals, **no provider call attempted**);
+  converted totals with one mocked rate; an over-budget position with
+  the overspend; a failed rate withholding the converted total entirely
+  while the per-currency totals stay; clearing a budget; a non-owner's
+  budget write; and a re-plan preserving the traveler's own items while
+  replacing AI ones (with `replacedCount` and the event).
+- `src/ai/agents/planning-agent.test.ts` (16): `groundPlanItems`
+  accepting case-insensitive destination matches and rejecting unknown
+  cities, out-of-range dates, duplicate days, and backwards times; the
+  output schema containing no cost/price/currency key; refusals without
+  dates, without destinations, for a non-owner, and without an Anthropic
+  key — **each asserting the model was never called**; a grounded plan
+  persisted with real destination ids and no costs; an unknown city
+  persisting **nothing**; a re-run replacing only AI items; an
+  orchestrator failure surfacing as `ProviderError`; and read-only tools.
+- `src/integrations/currency/provider.test.ts` (10, reworked): both
+  vendors' real shapes; **endpoint regression tests** asserting Fixer
+  hits `data.fixer.io` and never `api.apilayer.com`, and that the
+  fallback hits `api.currencylayer.com` and never `exchangerates_data`;
+  error shapes; missing pair; and the dual-vendor fallback composing
+  end to end.
+- `src/integrations/document-storage/provider.test.ts` (4, new): the
+  verbatim live Filestack response parsed into the handle as
+  `storageKey`; the POST's content type; a malformed response rejected
+  as `ProviderError`; handle extraction.
+- `src/ai/tools/registry.test.ts`: the exhaustive approved-tool list
+  updated to 13 with `get_trip_itinerary`.
+
+**Live verification (preview, real Postgres/Redis, real provider keys):**
+
+- `/api/health` reports all 11 supplied keys `configured: true`.
+- Registered, logged in, created a dated trip, and drove the whole
+  itinerary API: an in-range item persisted with its cost; a day after
+  the trip's end returned `400` naming both dates ("The trip ends on
+  2026-11-07; 2026-11-20 is after it"); `PATCH` with explicit nulls
+  cleared a cost; `DELETE` removed it; a second user got `404` on the
+  first user's itinerary.
+- **Budget validation with real FX:** with a EUR 500 cap and items of
+  15 EUR + 100 USD, the status reported exact per-currency totals, a
+  converted total of **104.03 EUR**, 395.97 remaining, the USD line's
+  real rate (0.89033) and its `rateAsOf` timestamp, and rate 1 with
+  `rateAsOf: null` for the EUR line. Before the Fixer fix the same
+  request returned `converted: null` with
+  `"fixer responded with HTTP 401"` — the honest failure path, observed
+  live, not just in a test.
+- **Weatherstack live**: a real snapshot recorded through the app (24 °C,
+  Overcast, 4 kph, 0 mm) — the mock adapter is no longer in play for
+  this provider.
+- `POST .../itinerary/plan` returned a clean `502 PROVIDER_ERROR`
+  naming the missing Anthropic key — no fabricated plan, exactly as the
+  feature is specified.
+- The itinerary page rendered `200` with the real timeline and budget.
+- All smoke rows deleted afterwards; `users`, `trips`,
+  `itinerary_items`, `trip_events`, `weather_snapshots`, `notifications`
+  are back to zero in `tripos_dev`, and `tripos_test` is zero too.
+
+**Known limits (stated, not hidden):**
+
+- **No `ANTHROPIC_API_KEY`, so the planner can't run live.** Eleven
+  provider keys were supplied; Anthropic wasn't one of them. The agent's
+  grounding, persistence, and refusal paths are covered by 16 tests
+  mocking only the Anthropic boundary, and the live endpoint refuses
+  with a message that says exactly what's missing. Everything
+  deterministic (manual items, budget validation, day range checks) is
+  fully live. Supplying the key is the only remaining step — no code
+  change.
+- **The FX keys revealed a credential/endpoint mismatch** (Fixer and
+  CurrencyLayer, above). Both adapters now work, but the corrected
+  endpoints are what _this project's_ credentials happen to use — if the
+  keys are ever rotated to a different product tier, the regression
+  tests will fail loudly rather than the app silently degrading.
+- **A plan is validated against dates and destinations, not against
+  reality.** Whether a museum is actually open, or a train actually
+  runs, comes from retrieval the model may or may not have done — hence
+  the mandatory `assumptions` array, shown to the traveler after every
+  run rather than buried.
+- **No item editing UI** (add/delete only, plus cost clearing via API).
+  Deliberate scope cut: budget correctness mattered more than a second
+  form; the PATCH endpoint already supports it.
+- **Two Filestack probe objects** (`tripos-probe.txt`,
+  `tripos-probe2.txt`) were created in the provider's storage while
+  verifying the live response shape; they are 8 and 713 bytes and
+  harmless, but this build has no delete path to remove them.
+- Same Phase 18/19 gap as before: no worker process exists, though the
+  itinerary itself needs no scheduler.
+
+**Next phase:** Phase 21 — Frontend Command Center (already complete).
+The next unstarted phase is Phase 22 — Command Bar.
 
 ---
 

@@ -169,8 +169,23 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
       {/* Two-column body */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Left column: destinations + travelers */}
+        {/* Left column: itinerary link + destinations + travelers */}
         <div className="space-y-6">
+          <Card>
+            <SectionHeading>Itinerary &amp; budget</SectionHeading>
+            <p className="mt-1.5 text-sm text-sand-600">
+              A day-by-day plan with deterministic budget validation: costs are totalled per
+              currency and checked against the trip&apos;s cap, and the planning agent can compose a
+              schedule from this trip&apos;s real data without ever inventing a price.
+            </p>
+            <Link
+              href={`/trips/${trip.id}/itinerary`}
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-md border border-sand-300 bg-sand-50 px-4 text-sm font-semibold text-sand-800 transition hover:bg-sand-100 dark:border-sand-200 dark:bg-sand-100 dark:text-sand-800 dark:hover:bg-sand-200"
+            >
+              Open itinerary planner
+            </Link>
+          </Card>
+
           <Card>
             <SectionHeading>Destinations</SectionHeading>
             {destinations.length === 0 ? (

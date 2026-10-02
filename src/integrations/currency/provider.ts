@@ -25,13 +25,28 @@ export interface CurrencyProvider extends ExternalProvider {
 // interchangeable adapters.
 //
 // Both verified against real documented responses as of 2026-08-27
-// (marketplace.apilayer.com/fixer-api, davidwalsh.name, omi.me). Note the
-// auth convention difference: Fixer has migrated to APILayer's unified
-// `api.apilayer.com/<product>` gateway with an `apikey` header, while
-// older sources still show the legacy `data.fixer.io?access_key=`
-// convention — the gateway form is used here since the credentials in
-// this project are APILayer marketplace-bundle keys. Re-verify against
-// live docs before this is ever run for real.
+// (marketplace.apilayer.com/fixer-api, davidwalsh.name, omi.me), and
+// then AGAIN against the live endpoints with this project's actual
+// credentials on 2026-10-02 — which is what actually settled the auth
+// convention question the earlier doc-only review could not:
+//
+//  - Fixer: the supplied credential works on the classic
+//    `data.fixer.io/api/latest?access_key=` endpoint (HTTP 200, real
+//    rates) and is REJECTED by APILayer's unified `api.apilayer.com/fixer`
+//    gateway (HTTP 401 "Invalid authentication credentials"). The first
+//    version of this adapter used the gateway because APILayer's docs
+//    point there; live evidence overruled it.
+//  - The second credential (`EXCHANGERATE_API_KEY`) is a **CurrencyLayer**
+//    key, not an `exchangerates_data` one: the APILayer gateway returns
+//    401 for it, exchangerate-api.com's v6 reports `invalid-key`, and
+//    `api.currencylayer.com/live` returns HTTP 200 with real quotes. The
+//    adapter therefore targets CurrencyLayer — the provider name
+//    ("exchangerate") is kept so health/observability identity stays
+//    stable, and the endpoint follows the credential.
+//
+// CurrencyLayer's free tier ignores `symbols` and returns every pair, so
+// the parser reads the one pair it asked for out of `quotes` rather than
+// assuming the response was filtered.
 
 const successRateSchema = z.object({
   success: z.literal(true),
@@ -92,15 +107,67 @@ export class FixerCurrencyProvider implements CurrencyProvider {
     if (!env.FIXER_API_KEY) {
       throw new ProviderError(this.providerName, "Fixer API key is not configured.");
     }
-    const url = new URL("https://api.apilayer.com/fixer/latest");
+    // `data.fixer.io?access_key=`, not the APILayer gateway: verified
+    // live on 2026-10-02 — this credential gets HTTP 200 here and 401 at
+    // api.apilayer.com/fixer (see the header comment).
+    const url = new URL("https://data.fixer.io/api/latest");
+    url.searchParams.set("access_key", env.FIXER_API_KEY);
     url.searchParams.set("base", base);
     url.searchParams.set("symbols", target);
 
-    const raw = await fetchJson(this.providerName, url.toString(), {
-      headers: { apikey: env.FIXER_API_KEY },
-    });
+    const raw = await fetchJson(this.providerName, url.toString());
     return parseRateResponse(this.providerName, raw, target);
   }
+}
+
+/**
+ * CurrencyLayer's response shape, which differs from Fixer's: `source`
+ * (not `base`) and `quotes` keyed by the concatenated pair ("EURUSD")
+ * rather than a flat `rates` map keyed by the target alone. Observed
+ * live on 2026-10-02, not guessed.
+ */
+const currencylayerSuccessSchema = z.object({
+  success: z.literal(true),
+  timestamp: z.number(),
+  source: z.string(),
+  quotes: z.record(z.string(), z.number()),
+});
+
+function parseCurrencylayerResponse(
+  providerName: string,
+  raw: unknown,
+  target: string,
+): NormalizedExchangeRate {
+  const errorParsed = errorRateSchema.safeParse(raw);
+  if (errorParsed.success) {
+    throw new ProviderError(
+      providerName,
+      errorParsed.data.error.info ?? `${providerName} returned an error.`,
+    );
+  }
+
+  const parsed = currencylayerSuccessSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ProviderError(
+      providerName,
+      `${providerName} response did not match the expected shape.`,
+      {
+        issues: parsed.error.issues,
+      },
+    );
+  }
+
+  const rate = parsed.data.quotes[`${parsed.data.source}${target}`];
+  if (rate === undefined) {
+    throw new ProviderError(providerName, `${providerName} did not return a rate for ${target}.`);
+  }
+
+  return {
+    base: parsed.data.source,
+    target,
+    rate,
+    asOf: new Date(parsed.data.timestamp * 1000).toISOString(),
+  };
 }
 
 export class ExchangeRateCurrencyProvider implements CurrencyProvider {
@@ -110,14 +177,16 @@ export class ExchangeRateCurrencyProvider implements CurrencyProvider {
     if (!env.EXCHANGERATE_API_KEY) {
       throw new ProviderError(this.providerName, "ExchangeRate API key is not configured.");
     }
-    const url = new URL("https://api.apilayer.com/exchangerates_data/latest");
-    url.searchParams.set("base", base);
+    // CurrencyLayer (see the header comment): verified live on
+    // 2026-10-02. `symbols` is passed for the paid tiers that honour it;
+    // the free tier returns every pair and the parser selects ours.
+    const url = new URL("https://api.currencylayer.com/live");
+    url.searchParams.set("access_key", env.EXCHANGERATE_API_KEY);
+    url.searchParams.set("source", base);
     url.searchParams.set("symbols", target);
 
-    const raw = await fetchJson(this.providerName, url.toString(), {
-      headers: { apikey: env.EXCHANGERATE_API_KEY },
-    });
-    return parseRateResponse(this.providerName, raw, target);
+    const raw = await fetchJson(this.providerName, url.toString());
+    return parseCurrencylayerResponse(this.providerName, raw, target);
   }
 }
 

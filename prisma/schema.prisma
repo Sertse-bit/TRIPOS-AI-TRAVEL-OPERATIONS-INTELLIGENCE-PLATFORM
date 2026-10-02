@@ -82,6 +82,24 @@ enum ApiHealthStatus {
   DOWN
 }
 
+enum ItineraryItemType {
+  FLIGHT
+  LODGING
+  ACTIVITY
+  TRANSPORT
+  MEAL
+  OTHER
+}
+
+/// Distinguishes the two writers of a plan. A re-plan replaces the
+/// AI_PLANNER rows and leaves the traveler's own items untouched --
+/// regenerating a schedule must never silently delete something the
+/// traveler typed in themselves.
+enum ItineraryItemSource {
+  USER
+  AI_PLANNER
+}
+
 // --- Auth ---------------------------------------------------------------
 
 model User {
@@ -133,8 +151,15 @@ model Trip {
   status    TripStatus @default(PLANNING)
   startDate DateTime?  @map("start_date")
   endDate   DateTime?  @map("end_date")
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  /// Optional budget cap (Phase 20) the itinerary's costs are validated
+  /// against, in `budgetCurrency`. Null means no cap; the two columns are
+  /// always set or cleared together (CHECK constraint in
+  /// prisma/sql/phase-20-itinerary-planner.sql). Deliberately on the trip,
+  /// not on the plan: it is a property of the trip itself.
+  budgetAmount   Decimal? @map("budget_amount") @db.Decimal(12, 2)
+  budgetCurrency String?  @map("budget_currency") @db.Char(3)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   travelers         Traveler[]
@@ -146,6 +171,7 @@ model Trip {
   recommendations   Recommendation[]
   events            TripEvent[]
   watch             TripWatch?
+  itineraryItems    ItineraryItem[]
 
   @@index([userId])
   @@map("trips")
@@ -186,6 +212,7 @@ model Destination {
 
   trip             Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
   weatherSnapshots WeatherSnapshot[]
+  itineraryItems   ItineraryItem[]
 
   @@index([tripId])
   @@map("destinations")
@@ -416,6 +443,51 @@ model Notification {
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+/// One scheduled element of a trip's day-by-day plan (Phase 20), owned by
+/// the itinerary module.
+///
+/// `estimatedCost` is only ever a figure the traveler supplied (or, later,
+/// one extracted from a real uploaded document) -- the planning agent's
+/// output schema has no cost fields at all, so an LLM-generated price
+/// estimate cannot reach this column even accidentally. See
+/// docs/BUILD_PROGRESS.md's Phase 20 entry.
+model ItineraryItem {
+  id String @id @default(uuid())
+
+  tripId String @map("trip_id")
+  /// A calendar day, deliberately `date` rather than `timestamptz`:
+  /// "day 2 of the trip" is a day on the traveler's itinerary, not an
+  /// instant in UTC that could shift when rendered in another timezone.
+  itineraryDay DateTime @map("itinerary_day") @db.Date
+  /// "HH:MM" 24-hour local time. A CHECK constraint in the phase's SQL
+  /// file enforces the format at the database level.
+  startTime    String?  @map("start_time")
+  endTime      String?  @map("end_time")
+
+  title         String
+  itemType      ItineraryItemType   @default(OTHER) @map("item_type")
+  location      String?
+  destinationId String?             @map("destination_id")
+  notes         String?
+
+  estimatedCost Decimal? @map("estimated_cost") @db.Decimal(12, 2)
+  currency      String?  @db.Char(3)
+
+  source    ItineraryItemSource @default(USER)
+  /// Groups the rows one planning run produced, so a re-run's replacement
+  /// is auditable after the fact rather than an unexplained diff.
+  planRunId String?             @map("plan_run_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  trip        Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  destination Destination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+
+  @@index([tripId, itineraryDay, startTime])
+  @@map("itinerary_items")
 }
 
 /// Trip Watch's scheduling state (Phase 19). One row per watched trip.

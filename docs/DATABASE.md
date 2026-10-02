@@ -1,6 +1,6 @@
 # TripOS — Database
 
-## Status: Phase 3 (Database Architecture) Complete
+## Status: Phase 3 (Database Architecture) Complete — schema additions since then are documented inline (Phases 14, 19, 20)
 
 Source of truth for the schema is `prisma/schema.prisma`. This document
 explains the design and, importantly, how it was actually verified.
@@ -63,8 +63,10 @@ erDiagram
     trips ||--o{ risk_assessments : has
     trips ||--o{ recommendations : has
     trips ||--o{ trip_events : has
+    trips ||--o{ itinerary_items : plans
 
     destinations ||--o{ weather_snapshots : has
+    destinations ||--o{ itinerary_items : anchors
     flight_records ||--o{ flight_status_snapshots : has
     trip_documents ||--o{ document_chunks : has
     risk_assessments ||--o{ recommendations : produces
@@ -82,6 +84,18 @@ erDiagram
         text user_id FK
         text title
         enum status
+        numeric budget_amount
+        char budget_currency
+    }
+    itinerary_items {
+        text id PK
+        text trip_id FK
+        date itinerary_day
+        text start_time
+        text title
+        enum item_type
+        enum source
+        numeric estimated_cost
     }
     flight_records {
         text id PK
@@ -140,6 +154,27 @@ beyond the brief's starting entity list — both explained inline in
 `schema.prisma` where they're defined, and both directly required by
 behavior specified elsewhere in the brief (state comparison for the
 Flight Agent; server-side session revocation for the auth flow).
+
+**`itinerary_items.itinerary_day` is a `date`, read back as text.**
+"Day 2 of the trip" is a calendar day on the traveler's itinerary, not
+an instant: storing it as `timestamptz` would let rendering shift it a
+day in another timezone, and letting node-postgres parse `date` into a
+JS `Date` has the same hazard in server-local time. The repository
+casts `itinerary_day::text` on every read and compares `'YYYY-MM-DD'`
+strings, so what was written is what comes back (Phase 20).
+
+**Costs and their currency travel together, and so do a budget's amount
+and currency.** Two CHECK constraints (`itinerary_items_cost_currency_together`,
+`trips_budget_pair_check`) enforce what the application also validates:
+a cost with no currency is uninterpretable, and a half-set budget cap
+would make "is this trip over budget?" unanswerable. Neither can be
+expressed in `prisma/schema.prisma`, same situation as
+`trip_watches_interval_bounds`.
+
+**`source` (`USER` / `AI_PLANNER`) is the column that keeps regeneration
+safe.** A re-plan deletes the trip's previous AI rows in one transaction
+and leaves `USER` rows alone; without it, "regenerate itinerary" would
+be indistinguishable from "overwrite everything the traveler typed".
 
 **Sessions, not the full Auth.js/NextAuth adapter schema.** The official
 Prisma adapter's `Account` and `VerificationToken` models exist for OAuth
@@ -286,3 +321,8 @@ Design notes worth recording:
   the same bounds, so behaviour stays correct either way — but the extra
   database-level guarantee would need re-adding by hand. Noted here
   rather than assumed away.
+- Same for Phase 20's three itinerary/budget CHECKs (`time format`,
+  `cost ↔ currency pair`, `budget pair + positive`) and its
+  `itinerary_items (trip_id, itinerary_day, start_time)` index: the index
+  is expressible in the schema, the checks are not. The DDL actually
+  executed is committed verbatim as `prisma/sql/phase-20-itinerary-planner.sql`.

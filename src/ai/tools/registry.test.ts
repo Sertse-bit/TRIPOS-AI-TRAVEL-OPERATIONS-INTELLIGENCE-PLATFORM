@@ -46,11 +46,15 @@ describe("tool registry: the approved-tools-only boundary", () => {
     expect(isApprovedTool("constructor")).toBe(false);
   });
 
-  it("exposes exactly the approved tools -- the brief's 10, plus read-only risk reads", () => {
-    // The brief named 10 tools. Phase 17 added two more, both strictly
-    // read-only (get_trip_risk, get_trip_risk_history): the Risk Agent
+  it("exposes exactly the approved tools -- the brief's 10, plus the read-only additions", () => {
+    // The brief named 10 tools. Phase 17 added two strictly read-only
+    // risk reads (get_trip_risk, get_trip_risk_history): the Risk Agent
     // needs the stored assessment to explain it, and giving it a way to
     // READ that score is the opposite of giving it a way to change one.
+    // Phase 20 added get_trip_itinerary, also read-only: the Planning
+    // Agent must see existing items and the real budget position before
+    // composing a schedule, and it deliberately gets no write tool at
+    // all (persistence happens after grounding, in the agent wrapper).
     // The list stays exhaustive on purpose -- this is the boundary, so an
     // unexpected addition should fail here rather than pass quietly.
     const names = getAllToolDefinitions().map((t) => t.name);
@@ -68,6 +72,7 @@ describe("tool registry: the approved-tools-only boundary", () => {
         "create_alert",
         "get_trip_risk",
         "get_trip_risk_history",
+        "get_trip_itinerary",
       ].sort(),
     );
   });

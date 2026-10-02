@@ -7,6 +7,7 @@ import {
   findTripById,
   findTripsByUserId,
   updateTrip as updateTripRow,
+  updateTripBudget as updateTripBudgetRow,
   updateTripStatus as updateTripStatusRow,
 } from "@/modules/trip/trip-repository";
 import {
@@ -42,6 +43,13 @@ import {
 } from "@/modules/trip/recommendation-repository";
 import { recordWeatherSnapshot as recordWeatherSnapshotRow } from "@/modules/trip/weather-snapshot-repository";
 import { recordCurrencySnapshot as recordCurrencySnapshotRow } from "@/modules/trip/currency-snapshot-repository";
+
+// Re-exported as part of this module's public interface: other modules may
+// reference these shapes (e.g. the Phase 20 planner needs TripRecord and
+// DestinationRecord) without importing the trip module's internal
+// repositories, per the project's module boundary rule.
+export type { TripRecord } from "@/modules/trip/trip-repository";
+export type { DestinationRecord } from "@/modules/trip/destination-repository";
 
 /**
  * Resolves a trip and verifies ownership in one step. Deliberately
@@ -386,6 +394,37 @@ export async function getTripDocuments(
 ): Promise<TripDocumentRecord[]> {
   await requireOwnedTrip(tripId, userId);
   return findDocumentsByTripId(tripId);
+}
+
+/**
+ * Public seam for the Itinerary module (Phase 20): a trip's destinations,
+ * ownership-checked. The itinerary planner needs the closed set of cities
+ * a generated plan is allowed to schedule against, and item validation
+ * needs to confirm a destination id genuinely belongs to this trip.
+ */
+export async function getTripDestinations(
+  tripId: string,
+  userId: string,
+): Promise<DestinationRecord[]> {
+  await requireOwnedTrip(tripId, userId);
+  return findDestinationsByTripId(tripId);
+}
+
+/**
+ * Sets or clears a trip's budget cap (Phase 20). The Itinerary module owns
+ * the budget *validation*, but the cap itself is a trip field, so the
+ * write stays here behind the same ownership check as every other trip
+ * mutation.
+ */
+export async function updateTripBudget(
+  tripId: string,
+  userId: string,
+  budget: { amount: number; currency: string } | null,
+): Promise<TripRecord> {
+  await requireOwnedTrip(tripId, userId);
+  const updated = await updateTripBudgetRow(tripId, budget);
+  if (!updated) throw new NotFoundError("Trip", tripId);
+  return updated;
 }
 
 // --- Public seams for the Risk Engine (Phase 16) -------------------------

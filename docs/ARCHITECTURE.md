@@ -748,3 +748,58 @@ runDueWatches({ ownerId? , now? , limit? })
   phase establishes is that the dispatch layer is safe to call from
   anywhere, any number of times, so adding a scheduler changes _who
   calls it_, not what happens.
+
+---
+
+## 22. Itinerary & Budget (Phase 20)
+
+The seventh specialized agent, and the first one whose output is
+_persisted_ rather than returned to a caller.
+
+```text
+POST /api/trips/[id]/itinerary/plan
+  │
+  ├─ requireAuth → runPlanningAgentForUser(tripId, userId)
+  │    ├─ getTrip + getTripDestinations        (ownership checked twice)
+  │    ├─ no dates / no destinations / no Anthropic key ─▶ refuse BEFORE any LLM call
+  │    ├─ runAgent(planningAgent, …)           (5 read tools, 8-call / 30s budget)
+  │    ├─ groundPlanItems(plan, trip, destinations)   [code, fail-closed]
+  │    │      every date inside the trip range; every city one of the
+  │    │      trip's own destinations; no duplicate day; end after start
+  │    └─ replaceGeneratedPlan(...) ── DELETE prior AI rows + INSERT new
+  │           in ONE transaction; USER rows untouched
+  └─ { days, rationale, assumptions, itemsCreated, aiItemsReplaced, budget }
+
+GET /api/trips/[id]/itinerary
+  └─ listTripItinerary → items + computeItineraryBudgetStatus(trip, items)
+         totalsByCurrency  = pure sums of stored values (no provider)
+         converted total   = only if EVERY rate resolves; otherwise
+                             converted: null + a named conversionError
+                             (never a partial sum shown as "the total")
+```
+
+- **Module boundary.** A new `itinerary` module owns items and budget
+  validation. It reaches the trip module only through public seams
+  (`getTrip`, `getTripDestinations`, `emitTripEvent`, `updateTripBudget`);
+  `TripRecord`/`DestinationRecord` are re-exported by the trip service so
+  no other module imports trip repositories. The itinerary module's own
+  repository is internal to it.
+- **Two writers, one table.** `source USER` (the item API) and
+  `source AI_PLANNER` (the planner) are mutually exclusive by
+  construction: a re-plan replaces exactly the AI rows, so regenerating
+  a schedule can never destroy something the traveler typed.
+- **The model writes no numbers.** Its output schema has no cost field,
+  and the budget it reasons about is fed to it through the read-only
+  `get_trip_itinerary` tool, computed deterministically. Costs are the
+  traveler's recorded input; unknown costs are counted
+  (`itemsWithoutCost`), never assumed to be zero.
+- **Events**: `ITINERARY_ITEM_ADDED` / `ITINERARY_ITEM_UPDATED` /
+  `ITINERARY_ITEM_REMOVED` / `ITINERARY_PLANNED` / `TRIP_BUDGET_UPDATED`,
+  all appended to the trip's own history through `emitTripEvent` — the
+  planner's runs are therefore auditable like everything else in Phase
+  7's append-only log.
+- **API**: `GET|POST /api/trips/[id]/itinerary`, `PATCH|DELETE
+/api/trips/[id]/itinerary/[itemId]`, `POST
+/api/trips/[id]/itinerary/plan`, `PUT|DELETE /api/trips/[id]/budget` —
+  all through `withApiHandler`, so the envelope and request ID are
+  uniform with every other route.

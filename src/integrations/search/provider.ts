@@ -4,13 +4,14 @@ import { ProviderError } from "@/shared/errors";
 import { type ExternalProvider, fetchJson } from "@/integrations/types";
 
 /**
- * Normalized search result. Zenserp's own response format (organic
- * results with position/title/link/description fields) is well-known
- * and stable, based on training knowledge of this provider rather than a
- * source verified during this build session — re-verify against
- * https://zenserp.com/documentation/ before this is ever run for real,
- * with more scrutiny than the Aviation/Weather/Currency adapters, which
- * were checked against multiple current sources.
+ * Normalized search result. Zenserp's response format (organic results
+ * with position/title/url/description fields) was originally written
+ * from training knowledge, explicitly flagged as unverified — then
+ * verified live on 2026-10-02 with this project's real key: a real
+ * `GET /api/v2/search` returned `organic[]` with exactly
+ * `{position, title, url, description}` (plus `destination`, `isAmp`),
+ * which is what this schema already parsed. The flag is cleared because
+ * the shape was observed, not because time passed.
  */
 export interface NormalizedSearchResult {
   title: string;

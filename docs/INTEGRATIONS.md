@@ -34,25 +34,32 @@ phase does not do" below.
 
 ## Verification methodology (important)
 
-This sandbox's network egress doesn't reach any of these vendor domains —
-the same constraint documented for Postgres/Redis's ecosystem tooling in
-`docs/DATABASE.md`. So none of these adapters could be smoke-tested with
-a live call. Instead, every adapter is tested by stubbing `fetch` to
-return a **realistic fixture** and asserting the adapter normalizes it
-correctly, handles the vendor's actual error shape, and rejects malformed
-responses — real tests of real parsing logic, just without a live network
-hop.
+Every adapter is tested by stubbing `fetch` to return a **realistic
+fixture** and asserting the adapter normalizes it correctly, handles the
+vendor's actual error shape, and rejects malformed responses — real
+tests of real parsing logic.
 
-Per-provider, how confident that fixture is:
+**How the fixtures were sourced, in two stages:** for Phase 5 they came
+from cross-checking dated public sources, because vendor domains were
+then unreachable from the build sandbox. **On 2026-10-02 the real
+credentials were wired in and every provider was called live** — which
+found two adapter bugs the doc review had missed (both fixtures were
+faithful to the _documented_ API and wrong about the _actual_ one). The
+fixtures below have since been replaced with verbatim live responses,
+and the endpoints that matter are pinned by regression tests.
 
-| Provider                         | Confidence                                             | Basis                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Aviationstack                    | **Verified this session**                              | Cross-checked against 4+ independent, dated public sources (GitHub `apilayer/aviationstack` issue #5 showing real output, tutorialsteacher.com, dev.to, PHPZAG) as of 2026-08-27                                                                                                                                      |
-| Weatherstack                     | **Verified this session**                              | Cross-checked against marketplace.apilayer.com, davidwalsh.name, tutorialsteacher.com as of 2026-08-27. Also surfaced a real quirk: Weatherstack returns HTTP 200 even for API-level errors — the error only appears in the response body shape, which the adapter checks explicitly (and which has a dedicated test) |
-| Fixer / ExchangeRate             | **Verified this session**                              | Confirmed Fixer has migrated to APILayer's unified `api.apilayer.com/<product>` gateway with an `apikey` header, distinct from the legacy `data.fixer.io?access_key=` convention older tutorials show — the adapter uses the gateway form since this project's credential is an APILayer marketplace key              |
-| Zenserp                          | Training knowledge only, **not verified this session** | Flagged in code comments — re-verify against zenserp.com's live docs before real use, with more scrutiny than the three above                                                                                                                                                                                         |
-| Filestack                        | Training knowledge only, **not verified this session** | Filestack's real upload flow (multipart intelligent ingestion, webhooks) has more surface area than this simple version covers — treat as a starting point for Phase 14, not a finished integration                                                                                                                   |
-| IPstack, Numverify, Mailboxlayer | Training knowledge only, **not verified this session** | Simple, stable, well-known APIs; lower risk than Filestack's more complex flow, but still unverified live                                                                                                                                                                                                             |
+Per-provider, current status:
+
+| Provider                         | Confidence                                                     | Basis                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aviationstack                    | **Live-verified 2026-10-02** (plus doc cross-check 2026-08-27) | Real `GET /v1/flights?flight_iata=ET602` returned HTTP 200 with the documented fields (`flight_status`, `departure.terminal`, …) — the shape already matched the adapter                                                                                                                                                                                                                      |
+| Weatherstack                     | **Live-verified 2026-10-02** (plus doc cross-check 2026-08-27) | A real snapshot recorded through the app (24 °C, Overcast, 4 kph). Doc review had surfaced its quirk: HTTP 200 even for API-level errors, checked in the body with a dedicated test                                                                                                                                                                                                           |
+| Fixer / ExchangeRate             | **Live-verified 2026-10-02 — the earlier claim was wrong**     | The APILayer gateway form the adapter used returns **401** for this project's Fixer key; `data.fixer.io/api/latest?access_key=` returns **200** with real rates. `EXCHANGERATE_API_KEY` is a **CurrencyLayer** credential: `api.currencylayer.com/live` 200, `exchangerates_data` 401, exchangerate-api v6 `invalid-key`. Both adapters re-pointed; both endpoints pinned by regression tests |
+| Zenserp                          | **Live-verified 2026-10-02**                                   | Real `GET /api/v2/search` returned `organic[]` with `{position, title, url, description}` — the shape the adapter expected, now observed rather than assumed                                                                                                                                                                                                                                  |
+| Filestack                        | **Live-verified 2026-10-02 — earlier assumption was wrong**    | A real `POST /api/store/S3` stored the bytes and returned `{url, size, type, filename}` with **no `handle` field**, which the first adapter required — every real upload would have been rejected as malformed even though it succeeded. `storageKey` now derives from the URL's handle segment; the fixture is the verbatim live response                                                    |
+| IPstack, Numverify, Mailboxlayer | **Live-verified 2026-10-02**                                   | Direct probes returned HTTP 200 with documented payloads; Mailboxlayer's real response is what the registration flow already consumes (`format_valid`)                                                                                                                                                                                                                                        |
+| Marketstack                      | **No adapter, by design**                                      | `MARKETSTACK_API_KEY` is deliberately unmapped to any feature (see `.env.example`) — wiring it up "because it's available" would be a dependency without a justification                                                                                                                                                                                                                      |
+| Screenshotlayer                  | **No adapter**                                                 | An availability flag exists in `src/config/env.ts`, but no TripOS feature needs page screenshots, so no adapter was written                                                                                                                                                                                                                                                                   |
 
 ## Resilience (Phase 6)
 

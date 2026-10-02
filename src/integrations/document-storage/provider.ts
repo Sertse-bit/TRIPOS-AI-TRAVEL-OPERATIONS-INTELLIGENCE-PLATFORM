@@ -14,19 +14,29 @@ export interface DocumentStorageProvider extends ExternalProvider {
 
 // --- Real adapter --------------------------------------------------------
 //
-// Based on training knowledge of Filestack's REST upload API (multipart
-// upload to a keyed endpoint, returning a handle/URL) rather than a
-// source verified during this build session — Filestack's actual upload
-// flow has more moving parts (multipart intelligent ingestion, webhooks)
-// than this simple version covers. Treat this as a starting point to
-// verify and likely expand against https://www.filestack.com/docs/api/
-// before Phase 14 builds the real upload pipeline on top of it, not a
-// finished integration.
+// Written from training knowledge of Filestack's REST upload API, then
+// VERIFIED LIVE on 2026-10-02 against `POST /api/store/S3` with this
+// project's real key — which is what caught a shape assumption the doc
+// review could not: the response is `{ url, size, type, filename }` and
+// contains no `handle` field. The first version of this adapter required
+// one, so every live upload would have been rejected as "did not match
+// the expected shape" even though the bytes were stored successfully.
+//
+// `storageKey` is therefore derived as the last path segment of the
+// returned URL (the file's handle, which is also what Filestack's delete
+// endpoint takes), rather than read from a field that isn't there.
 
 const filestackResponseSchema = z.object({
-  handle: z.string(),
-  url: z.string(),
+  url: z.string().min(1),
+  size: z.number().optional(),
+  filename: z.string().optional(),
 });
+
+/** Last path segment of the returned CDN URL — Filestack's handle for this object. */
+export function handleFromStorageUrl(url: string): string {
+  const trimmed = url.replace(/\/+$/, "");
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
+}
 
 export class FilestackProvider implements DocumentStorageProvider {
   readonly providerName = "filestack";
@@ -55,7 +65,7 @@ export class FilestackProvider implements DocumentStorageProvider {
       );
     }
 
-    return { storageKey: parsed.data.handle, url: parsed.data.url };
+    return { storageKey: handleFromStorageUrl(parsed.data.url), url: parsed.data.url };
   }
 }
 
