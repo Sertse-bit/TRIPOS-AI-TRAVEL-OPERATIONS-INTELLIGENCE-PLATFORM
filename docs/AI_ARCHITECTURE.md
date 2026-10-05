@@ -1,9 +1,10 @@
 # TripOS — AI Architecture
 
-## Status: Phase 20 (AI Itinerary Planner) Complete — all 7 specialized agents built
+## Status: Phase 22 (Command Bar) Complete — 8 agents built
 
-This document covers the AI tool layer, the orchestrator, and the
-specialized agents (Phases 10–13, 16–17, 20) built on top of it.
+This document covers the AI tool layer, the orchestrator, the 7
+specialized agents (Phases 10–13, 16–17, 20), and the generalist Command
+Agent (Phase 22) built on top of them.
 
 ## The core security principle
 
@@ -428,3 +429,65 @@ path returns a structured `502 PROVIDER_ERROR` naming the missing key
 (observed against the running preview), and the deterministic half of
 the feature (manual items, day-range validation, real FX budget
 validation) ran end to end against real providers.
+
+## The Command Agent (Phase 22)
+
+`src/ai/agents/command-agent.ts` is the eighth agent and the first
+_generalist_: the 7 specialized agents each answer their own kind of
+question, while the Command Agent takes one free-text command from the
+trip page's command bar and answers it with whatever read tools it
+needs. It is the concrete implementation of the request flow
+`docs/ARCHITECTURE.md` Section 8 has described since Phase 1
+(`POST /api/trips/[id]/ask` → orchestrator → tool layer → answer with
+evidence).
+
+### The read-only invariant
+
+Its `allowedTools` are exactly the registry's 11 read tools. The two
+action tools — `create_recommendation` and `create_alert` — are absent,
+and `command-agent.test.ts` asserts that, the same way Phase 20's test
+asserts the planner's output schema has no cost field. A traveler's
+question must never mutate the trip as a side effect of being asked; if
+the command implies an action, the answer recommends it and the traveler
+does it through the UI's real forms.
+
+### Evidence with real provenance, checked in code
+
+The answer's `evidence[]` entries must each name a tool **that was
+actually invoked in that run**. That check needed one new thing from the
+orchestrator: `runAgent` now records `toolCalls: OrchestratorToolCall[]`
+(name + success, in order) on both result branches — the first change to
+`orchestrator.ts` since Phase 9, purely additive, and the 9 existing
+orchestrator tests still pass. `assertEvidenceWasInvoked()` then rejects
+any answer citing a tool absent from that log with a `ValidationError`
+listing the offending sources. This is the same discipline as Phase 17's
+`assertGroundedInFactors`: the prompt requests grounded evidence, and
+code enforces it against a record the model cannot author.
+
+A subtlety worth keeping: an invoked-but-_failed_ call still counts as
+grounded. "The weather provider returned an error" is an honest,
+checkable statement about a real invocation — the call log carries the
+failure and the UI renders it as a ✗ — so requiring success would reject
+the most honest answers instead of the fabricated ones.
+
+### The same honest-refusal policy, once more
+
+Without `ANTHROPIC_API_KEY` the command bar refuses with a
+`ProviderError` naming the key before any model call, and the trip page
+renders the bar disabled with that explanation. It is the fourth
+LLM-backed feature to refuse rather than fake (after risk explanations,
+research, and planning); the difference here is only that the refusal is
+also surfaced in the UI at first glance, because the command bar sits at
+the top of the trip page.
+
+### Verification status
+
+Identical situation to Phases 9/13/17/20: no Anthropic key in this
+workspace, so tests mock only the Anthropic boundary. Everything the
+sandbox can verify for real was verified: the full pipeline test runs
+real tools against real Postgres (a real `get_trip` call appears in the
+real call log), the fabricated-provenance rejection is exercised with a
+real schema-valid answer, and the live refusal path returns the
+structured `502` observed against the running preview. The happy path
+(an actual model composing an answer over live provider data) remains
+unverifiable here and is documented as such, not simulated.

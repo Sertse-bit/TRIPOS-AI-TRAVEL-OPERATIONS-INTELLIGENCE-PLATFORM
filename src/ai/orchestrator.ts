@@ -41,14 +41,39 @@ export type OrchestratorFailureReason =
   | "MODEL_STOPPED_WITHOUT_ANSWER"
   | "API_ERROR";
 
+/**
+ * One real tool invocation from a run, in the order it happened. Added for
+ * the Phase 22 Command Bar, whose whole point is showing the traveler which
+ * real checks produced the answer: the trail is code-recorded here, so a
+ * caller can verify a claimed source was actually invoked (see
+ * ai/agents/command-agent.ts) instead of trusting the model's prose.
+ *
+ * `success` records whether the tool itself returned a result or a
+ * structured error -- an honest "the weather provider failed" answer cites
+ * a failed call, so a failed call still counts as evidence that the check
+ * happened.
+ */
+export interface OrchestratorToolCall {
+  name: string;
+  success: boolean;
+}
+
 export type OrchestratorRunResult<T> =
-  | { success: true; data: T; toolCallsUsed: number; durationMs: number; tokensUsed: number }
+  | {
+      success: true;
+      data: T;
+      toolCallsUsed: number;
+      durationMs: number;
+      tokensUsed: number;
+      toolCalls: OrchestratorToolCall[];
+    }
   | {
       success: false;
       reason: OrchestratorFailureReason;
       toolCallsUsed: number;
       durationMs: number;
       tokensUsed: number;
+      toolCalls: OrchestratorToolCall[];
     };
 
 /**
@@ -73,6 +98,7 @@ export async function runAgent<T>(
   const startedAt = Date.now();
   let toolCallsUsed = 0;
   let tokensUsed = 0;
+  const toolCalls: OrchestratorToolCall[] = [];
 
   const toolDefs: Anthropic.Tool[] = agent.allowedTools.map((toolName) => {
     const def = getToolDefinition(toolName);
@@ -96,7 +122,14 @@ export async function runAgent<T>(
     const elapsed = Date.now() - startedAt;
     if (elapsed > limits.maxWallClockMs) {
       logger.warn({ agent: agent.name, elapsed }, "Agent run exceeded wall-clock limit");
-      return { success: false, reason: "TIMEOUT", toolCallsUsed, durationMs: elapsed, tokensUsed };
+      return {
+        success: false,
+        reason: "TIMEOUT",
+        toolCallsUsed,
+        durationMs: elapsed,
+        tokensUsed,
+        toolCalls,
+      };
     }
     if (tokensUsed > limits.maxTokenBudget) {
       return {
@@ -105,6 +138,7 @@ export async function runAgent<T>(
         toolCallsUsed,
         durationMs: Date.now() - startedAt,
         tokensUsed,
+        toolCalls,
       };
     }
 
@@ -125,6 +159,7 @@ export async function runAgent<T>(
         toolCallsUsed,
         durationMs: Date.now() - startedAt,
         tokensUsed,
+        toolCalls,
       };
     }
 
@@ -144,6 +179,7 @@ export async function runAgent<T>(
         toolCallsUsed,
         durationMs: Date.now() - startedAt,
         tokensUsed,
+        toolCalls,
       };
     }
 
@@ -159,6 +195,7 @@ export async function runAgent<T>(
             toolCallsUsed,
             durationMs: Date.now() - startedAt,
             tokensUsed,
+            toolCalls,
           };
         }
         // Give the model a chance to correct itself within budget,
@@ -180,6 +217,7 @@ export async function runAgent<T>(
           toolCallsUsed,
           durationMs: Date.now() - startedAt,
           tokensUsed,
+          toolCalls,
         };
       }
 
@@ -188,6 +226,7 @@ export async function runAgent<T>(
       // another agent, so agent-to-agent recursion is impossible by
       // construction here, not merely disallowed by convention.
       const result = await callTool(block.name, block.input, toolContext);
+      toolCalls.push({ name: block.name, success: result.success });
       toolResults.push({
         type: "tool_result",
         tool_use_id: block.id,

@@ -79,6 +79,17 @@ metric.
   price by construction), and re-planning replaces only its own previous
   items. Without an `ANTHROPIC_API_KEY` the planner says so plainly
   while everything deterministic stays available.
+- **Command bar** — ask the running trip anything in plain language at
+  `POST /api/trips/[id]/ask` (the trip page renders it at the top): the
+  answer comes back as decision, recommended action, reasoning, and a
+  per-claim evidence list, and **every evidence entry must name a tool
+  the run actually called** — the orchestrator records the real call
+  trail, and an answer citing a check that never happened is rejected in
+  code rather than displayed with invented provenance. The agent is
+  strictly read-only (no write tool is even offered), and the panel
+  shows the real ✓/✗ trail, call count, and duration. Without an
+  `ANTHROPIC_API_KEY` it refuses plainly instead of answering from
+  nothing.
 - **Frontend command center** — themed landing page, sign-in/register,
   trips dashboard, trip detail with live agents, a risk card showing
   every factor's points and the real values behind them, saved

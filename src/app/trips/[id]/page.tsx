@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
+import { orNotFound } from "@/app/not-found-guard";
 import { getTripDigitalTwin, getTripEventHistory } from "@/modules/trip/trip-service";
 import { getTripIndexStatus } from "@/modules/trip/rag-service";
 import { getLatestTripRisk } from "@/modules/risk/risk-service";
 import { listTripRecommendations } from "@/modules/risk/recommendation-service";
 import { getTripWatch } from "@/modules/monitor/watch-service";
+import { providerAvailability } from "@/config/env";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
 import {
   documentStatusTone,
@@ -29,6 +31,7 @@ import {
   TripWatchCard,
 } from "./trip-actions";
 import { OperationalStateBanner } from "./operational-state-banner";
+import { CommandBar } from "./command-bar";
 
 function fmtDate(d: Date | string): string {
   return new Date(d).toLocaleDateString(undefined, {
@@ -130,12 +133,14 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const user = await requireSession(`/trips/${id}`);
 
-  const twin = await getTripDigitalTwin(id, user.id);
-  const events = await getTripEventHistory(id, user.id);
-  const { indexedChunks } = await getTripIndexStatus(id, user.id);
-  const latestRisk = await getLatestTripRisk(id, user.id);
-  const recommendations = await listTripRecommendations(id, user.id);
-  const watch = await getTripWatch(id, user.id);
+  // A trip this session doesn't own (or that doesn't exist) renders the
+  // app's 404, not a 500 — the same semantics the API has.
+  const twin = await orNotFound(() => getTripDigitalTwin(id, user.id));
+  const events = await orNotFound(() => getTripEventHistory(id, user.id));
+  const { indexedChunks } = await orNotFound(() => getTripIndexStatus(id, user.id));
+  const latestRisk = await orNotFound(() => getLatestTripRisk(id, user.id));
+  const recommendations = await orNotFound(() => listTripRecommendations(id, user.id));
+  const watch = await orNotFound(() => getTripWatch(id, user.id));
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -159,6 +164,9 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <StatusSelect tripId={trip.id} current={trip.status} />
         </div>
       </div>
+
+      {/* Command bar (Phase 22) — one command in, a grounded answer out */}
+      <CommandBar tripId={trip.id} aiEnabled={providerAvailability.anthropic} />
 
       {/* Operational state banner */}
       <OperationalStateBanner

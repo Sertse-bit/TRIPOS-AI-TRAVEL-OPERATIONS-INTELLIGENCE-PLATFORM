@@ -1958,7 +1958,111 @@ frontend surface for it to follow.
 
 ## Phase 22 — Command Bar
 
-**Status:** Not started
+**Status:** Complete
+
+**Implemented:**
+
+- **The ask route from Phase 1's architecture, finally real**:
+  `POST /api/trips/[id]/ask` (docs/ARCHITECTURE.md Section 8 specified
+  this exact path for a command-bar question back in Phase 1) —
+  `withApiHandler`, `requireAuth`, ownership checked before any model
+  call, and a `{ command }` body validated at the request boundary
+  (1–500 chars) and again in the agent.
+- **Command Agent** (`src/ai/agents/command-agent.ts`), the eighth agent
+  and the first generalist: one command in, one structured answer out in
+  the same Decision / Evidence / Reasoning / Recommendation / Confidence
+  shape Phase 17 established for risk, generalized to any question about
+  a trip. Three properties are enforced in code, not just prompted:
+  - **Read-only by construction.** Its `allowedTools` are exactly the
+    registry's 11 read tools; `create_recommendation` and `create_alert`
+    are absent, and a test pins that (the same discipline as Phase 20's
+    "no cost field" test). A command-bar question can never mutate a
+    trip as a side effect of being asked.
+  - **Real provenance.** `runAgent` now records a genuine call trail
+    (`OrchestratorToolCall[]`: tool name + whether it succeeded), the
+    first change to the orchestrator since Phase 9 and additive only.
+    `assertEvidenceWasInvoked()` rejects any answer whose `evidence[]`
+    cites a tool that was never called in that run — an invented check is
+    a ValidationError, not a rendered answer. A _failed_ call still
+    counts as invoked: "the weather provider returned an error" is an
+    honest statement about a real check, and the UI shows the ✗.
+  - **No fabricated fallback.** Without `ANTHROPIC_API_KEY` it refuses
+    with a clear `ProviderError` naming the key, same as the Risk,
+    Research, and Planning agents; the trip page renders the bar
+    disabled with that explanation instead of pretending.
+- **Command bar UI** (`src/app/trips/[id]/command-bar.tsx`, a client
+  island mounted at the top of the trip detail page): free-text input,
+  five example commands, and a result panel showing the decision, the
+  recommended action, the reasoning, the per-item evidence list with a
+  tool-name chip per claim, an explicit "couldn't be verified" section
+  for `dataGaps`, the confidence bar, and the real tool-call trail
+  (`n tool calls · X.Xs` with ✓/✗ per call). The API returns
+  `toolCallsUsed`/`durationMs`/`tokensUsed` alongside the answer so the
+  panel reports real run metadata rather than a guess.
+- **Fixed a pre-existing Phase 21 defect found by live verification**:
+  `/trips/[id]` and `/trips/[id]/itinerary` returned **500** for a trip
+  the session doesn't own, because `requireOwnedTrip`'s `NotFoundError`
+  escaped the server-component render instead of being translated. The
+  API has had correct semantics since Phase 7 (that error → 404
+  envelope); pages now go through `orNotFound()`
+  (`src/app/not-found-guard.ts`), so a non-owner's request is
+  indistinguishable from a genuinely unknown trip. Confirmed against the
+  running app: non-owner → 404, owner → 200, unknown id → 404.
+
+**Files changed:**
+
+- `src/ai/agents/command-agent.ts`, `src/ai/agents/command-agent.test.ts`
+  (new)
+- `src/ai/orchestrator.ts` (tool-call trail added to both result
+  branches)
+- `src/app/api/trips/[id]/ask/route.ts` (new)
+- `src/app/trips/[id]/command-bar.tsx` (new),
+  `src/app/trips/[id]/page.tsx` (mount + 404 fix)
+- `src/app/not-found-guard.ts` (new),
+  `src/app/trips/[id]/itinerary/page.tsx` (404 fix)
+
+**Verification:**
+
+- `pnpm typecheck` → 0 errors; `pnpm lint` → 0 errors, 0 warnings
+- `pnpm test` → **352/352 passing (34 files)**; +11 new command-agent
+  tests (read-only invariant, evidence grounding incl. failed-call
+  nuance, non-owner rejection with the model mock never called, blank and
+  over-length commands, key refusal, full pipeline against real
+  Postgres, fabricated-provenance rejection, orchestrator failure →
+  ProviderError). The 9 orchestrator tests still pass with the added
+  field.
+- `pnpm build` → succeeded; `/api/trips/[id]/ask` present in the route
+  manifest.
+- Live smoke against the running preview (real dev Postgres + Redis):
+  register → create a dated trip → `POST /ask` returns the honest
+  `502 PROVIDER_ERROR` naming the missing Anthropic key (no key is
+  configured in this workspace) → blank command → 400 → unauthenticated
+  → 401 → second user on the same trip → 404 → trip page 200 with the
+  command bar rendered and the disabled explanation text visible.
+  Smoke users deleted; both DBs back to zero rows.
+
+**Known limitations:**
+
+- **The happy path is not live-verifiable in this sandbox**: there is no
+  `ANTHROPIC_API_KEY` (11 other provider keys are configured; Anthropic
+  was not among them), so every model-backed path is covered by tests
+  that mock only the Anthropic boundary while the tool registry, trip
+  authorization, and Postgres underneath are real — the same situation
+  Phases 9/13/17/20 documented. Nothing was fabricated to work around
+  it.
+- The command bar answers a single command at a time; there is no
+  conversation memory across commands (each run is independent, and the
+  page keeps only the latest result). Building on the same agent would
+  be the natural next step if multi-turn is ever wanted.
+- Evidence grounding checks _that_ a cited tool was invoked, not that the
+  quoted observation matches the tool's payload. The verbatim comparison
+  would need the orchestrator to retain full tool outputs per call —
+  deliberately not stored by default.
+- `POST /ask` is not rate-limited beyond the session; each successful
+  command costs model tokens (bounded at 8 tool calls / 30s / 50k tokens
+  per run by the orchestrator).
+
+**Next phase:** Phase 23 — System Observability UI.
 
 ---
 

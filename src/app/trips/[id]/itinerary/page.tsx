@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/app/require-auth";
+import { orNotFound } from "@/app/not-found-guard";
 import { getTripDigitalTwin } from "@/modules/trip/trip-service";
 import { listTripItinerary } from "@/modules/itinerary/itinerary-service";
 import { providerAvailability } from "@/config/env";
@@ -56,8 +57,9 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const user = await requireSession(`/trips/${id}/itinerary`);
 
-  const twin = await getTripDigitalTwin(id, user.id);
-  const { items, budget } = await listTripItinerary(id, user.id);
+  // Same 404 semantics as the trip page and the API (see not-found-guard.ts).
+  const twin = await orNotFound(() => getTripDigitalTwin(id, user.id));
+  const { items, budget } = await orNotFound(() => listTripItinerary(id, user.id));
   const { trip, destinations } = twin;
 
   const days = tripDays(trip.startDate, trip.endDate);

@@ -803,3 +803,49 @@ GET /api/trips/[id]/itinerary
 /api/trips/[id]/itinerary/plan`, `PUT|DELETE /api/trips/[id]/budget` —
   all through `withApiHandler`, so the envelope and request ID are
   uniform with every other route.
+
+---
+
+## 23. Command Bar (Phase 22)
+
+Section 8's request flow, implemented — the path it named back in Phase
+1, `POST /api/trips/[id]/ask`, is now the route the trip page's command
+bar posts to.
+
+```text
+POST /api/trips/[id]/ask  { command: 1–500 chars }
+  │
+  ├─ withApiHandler → requireAuth → body validated (Zod)
+  ├─ runCommandForUser(tripId, userId, command)
+  │    ├─ getTrip                       (ownership BEFORE any LLM call)
+  │    ├─ command re-validated, destinations pre-fetched into the message
+  │    ├─ no Anthropic key ─▶ ProviderError, 502, before any model call
+  │    ├─ runAgent(commandAgent, …)     (11 read tools, 8 calls / 30s / 50k)
+  │    │       └─ records a real OrchestratorToolCall[] trail
+  │    ├─ assertEvidenceWasInvoked(evidence, trail)   [code, fail-closed]
+  │    └─ { decision, evidence, reasoningSummary, recommendationText,
+  │          confidence, dataGaps, toolCalls, toolCallsUsed,
+  │          durationMs, tokensUsed }
+  └─ trip page renders decision / action / reasoning / evidence chips /
+     “couldn’t be verified” gaps / confidence / the real ✓✗ call trail
+```
+
+- **Read-only, structurally.** The agent's allowed tools are exactly the
+  registry's 11 reads; the two action tools are excluded and a test pins
+  it. A question can never mutate a trip as a side effect.
+- **Provenance is code-checked.** Each `evidence[]` entry must name a
+  tool the orchestrator actually invoked in that run — an invoked-but-
+  failed call counts (the answer may honestly report the failure), a
+  never-called tool is a `ValidationError`. The model does not get to
+  author its own audit trail; `runAgent` records it.
+- **The UI shows the same trail** the check ran against: every tool call
+  with ✓/✗, plus the run's real duration and call count from the API
+  response — no invented "AI thinking" affordances.
+- **Non-owner and unknown-trip requests are 404s**, never 500s: server
+  components load trip data through `orNotFound()`, which translates the
+  trip module's `NotFoundError` into Next's `notFound()` — the same
+  semantics the API has had since Phase 7.
+- **No key, no fake answer.** Without `ANTHROPIC_API_KEY` the endpoint
+  returns the same honest `502 PROVIDER_ERROR` as the risk, research,
+  and planning agents, and the page renders the bar disabled with that
+  explanation.
