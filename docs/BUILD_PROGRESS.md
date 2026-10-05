@@ -1948,8 +1948,8 @@ The next unstarted phase is Phase 22 — Command Bar.
 - No document upload UI yet: the documents section renders what the
   digital twin returns, but the upload/storage + extraction pipeline is
   Phase 14 (not started).
-- Command bar (Phase 22), observability UI (Phase 23), and the audit-trail
-  view (Phase 24) are still ahead.
+- Command bar (Phase 22) and the observability panel (Phase 23) are
+  done. The audit-trail view (Phase 24) is still ahead.
 
 **Next phase:** Phase 14 — Document Intelligence (backend), with the
 frontend surface for it to follow.
@@ -2068,7 +2068,75 @@ frontend surface for it to follow.
 
 ## Phase 23 — System Observability UI
 
-**Status:** Not started
+**Status:** Complete
+
+An observability panel built strictly from what the system actually
+records — no invented metrics. `GET /api/observability` (auth required,
+deployment-level, not owner-scoped) and the `/trips/observability` page
+(“System” in the trips nav) render the same report from
+`observability-service.getSystemObservability()`:
+
+- **Infrastructure** — live database and Redis checks with _measured_
+  latency from real round trips; errors truncated to 300 chars.
+- **Providers** — the union of every provider `providerAvailability`
+  knows, every `api_health` row, and every in-process circuit entry,
+  sorted. Each row shows: configured (env key present) or not, its real
+  health row verbatim (status, consecutive failures, last success/failure
+  timestamps) or **“never exercised”**, and its in-process circuit state
+  or “no circuit activity”.
+- **Never exercised is never healthy.** A provider with no recorded
+  attempt shows `health: null` — the panel refuses to fabricate an
+  OPERATIONAL badge for a provider that simply hasn't been called yet
+  (the no-fake-data rule applied to the panel itself). The summary
+  counts `operational / degraded / down / neverExercised` and a test
+  pins the summary to the rows it summarizes.
+- **Circuit state is per-process** (the breaker is in-memory by design),
+  so the report shows it as a separate badge, never merged into health.
+  `circuit-breaker.getAllCircuitStates()` (Phase 23 addition) exposes
+  snapshots without touching breaker behavior.
+- **The page says what it can't show**: a “How to read this panel” card
+  explains the inverted circuit naming (CLOSED = healthy) and states
+  plainly that there are no CPU/memory graphs because no metrics
+  pipeline exists. The Refresh button triggers a real re-check via
+  `router.refresh()` — no fake polling timer.
+
+**Files:** `src/modules/observability/observability-service.ts` (new),
+`src/modules/observability/observability-service.test.ts` (new, 5 tests
+with real DB/Redis round trips), `src/app/api/observability/route.ts`
+(new), `src/app/trips/observability/page.tsx` + `refresh-button.tsx`
+(new), `src/infrastructure/circuit-breaker.ts` (additive snapshot fn),
+`src/components/tone.ts` (apiHealthTone / circuitStateTone),
+`src/app/trips/layout.tsx` (System nav link).
+
+**Verification:** 357/357 tests (35 files), typecheck, lint, and build
+clean. Live-smoked on the preview: anon `GET /api/observability` → 401;
+authed → report with 12 providers, 11 configured, all 12 “never
+exercised” after dev-DB cleanup; then a **real** weatherstack call (Rome
+weather check through the destination flow) flipped exactly that
+provider to OPERATIONAL with a real timestamp (`neverExercised` 12 → 11,
+`operational` 0 → 1). Smoke user/trip rows removed afterward.
+
+**Found and fixed during this phase — non-hermetic test setup.**
+`vitest.setup.ts` used `process.env.DATABASE_URL ??= …`, but Vitest
+loads `.env.local` into `process.env` first, so the `??=` was a no-op:
+the entire suite had been running against the **development** database
+with **real** provider keys. Consequences discovered: dev `api_health`
+was full of `test-provider-*` rows plus a weatherstack row from a test
+that quietly stopped hitting its fetch stub once a real key existed.
+The setup now assigns test DB/Redis URLs and nine fake provider keys
+**unconditionally** (with `TEST_DATABASE_URL` as an escape hatch), and
+the suite was re-run to confirm it only touches `tripos_test`. The dev
+`api_health` garbage was deleted; the dev table now repopulates from
+real usage only.
+
+**Known limitations:** circuit states reset on process restart (the
+breaker is in-memory by design — the report labels it as in-process);
+no historical metrics or time-series (nothing records them — the panel
+says so instead of graphing what doesn't exist); health rows only
+appear once a provider is actually exercised through the resilience
+layer.
+
+**Next phase:** Phase 24 — Audit Trail.
 
 ---
 

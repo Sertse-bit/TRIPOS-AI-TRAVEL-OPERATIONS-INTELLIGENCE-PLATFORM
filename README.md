@@ -97,6 +97,13 @@ metric.
   `/trips/watches` (every watch's real next/last run state, including its
   last failure, plus a due-check sweep), analytics computed from your own
   rows, and a settings page showing real provider availability.
+- **System observability** — a deployment-level panel at
+  `/trips/observability` with live, latency-measured database and Redis
+  checks and a per-provider view assembled from real records only: the
+  health row the resilience layer wrote on each actual call (or an
+  honest “never exercised”), the in-process circuit state, and whether
+  a key is configured. No CPU/memory graphs, because no metrics
+  pipeline exists — and the page says so instead of faking one.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.

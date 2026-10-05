@@ -75,6 +75,42 @@ export function riskSeverityTone(severity: string): Tone {
 }
 
 /**
+ * Provider health (Phase 23), as recorded by the resilience layer after
+ * real provider attempts. Thresholds are the repository's own: 1-2
+ * consecutive failures is DEGRADED, 3+ is DOWN.
+ */
+export function apiHealthTone(status: string): Tone {
+  switch (status) {
+    case "OPERATIONAL":
+      return "ok";
+    case "DEGRADED":
+      return "warn";
+    case "DOWN":
+      return "alert";
+    default:
+      return "neutral";
+  }
+}
+
+/**
+ * Circuit breaker state (Phase 23). CLOSED is the healthy state here --
+ * the naming is inverted from the risk tones on purpose: a closed
+ * circuit is a working one.
+ */
+export function circuitStateTone(state: string): Tone {
+  switch (state) {
+    case "CLOSED":
+      return "ok";
+    case "HALF_OPEN":
+      return "warn";
+    case "OPEN":
+      return "alert";
+    default:
+      return "neutral";
+  }
+}
+
+/**
  * Recommendation lifecycle (Phase 17), which is a different axis from
  * risk severity: PENDING means nobody has looked at it yet, so it reads
  * as needing attention rather than being scored.

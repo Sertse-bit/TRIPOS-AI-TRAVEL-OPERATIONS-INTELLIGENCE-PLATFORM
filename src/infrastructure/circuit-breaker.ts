@@ -105,6 +105,30 @@ export function getCircuitState(providerName: string): CircuitState {
   return getRecord(providerName).state;
 }
 
+export interface CircuitSnapshot {
+  provider: string;
+  state: CircuitState;
+  consecutiveFailures: number;
+  /** Epoch ms when the circuit last opened; null while CLOSED. */
+  openedAt: number | null;
+}
+
+/**
+ * A real read-only snapshot of the in-process circuit registry, for the
+ * Phase 23 observability panel. It reports only providers that have
+ * actually been attempted at least once in this process — an absent
+ * provider is genuinely "never attempted", which is different from
+ * "closed and healthy" and must not be rendered as such.
+ */
+export function getAllCircuitStates(): CircuitSnapshot[] {
+  return [...circuits.entries()].map(([provider, record]) => ({
+    provider,
+    state: record.state,
+    consecutiveFailures: record.consecutiveFailures,
+    openedAt: record.openedAt,
+  }));
+}
+
 /** Test-only: clears all circuit state between test cases. */
 export function resetAllCircuits(): void {
   circuits.clear();

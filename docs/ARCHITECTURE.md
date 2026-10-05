@@ -849,3 +849,44 @@ POST /api/trips/[id]/ask  { command: 1–500 chars }
   returns the same honest `502 PROVIDER_ERROR` as the risk, research,
   and planning agents, and the page renders the bar disabled with that
   explanation.
+
+---
+
+## 24. System Observability (Phase 23)
+
+The panel answers one question — _what has this deployment actually
+done?_ — from exactly three real sources, and nothing else:
+
+```text
+GET /api/observability   (requireAuth, deployment-level)
+  ├─ infrastructure: database / Redis pinged NOW, latency measured
+  ├─ providers:      union of providerAvailability ∪ api_health rows
+  │                  ∪ in-process circuit entries, sorted; per provider:
+  │                  { configured, health | null, circuit | null }
+  └─ summary:        { providers, configured, operational, degraded,
+                       down, neverExercised }
+```
+
+- **Sources of truth:** `api_health` rows (written by the resilience
+  layer on every real provider attempt since Phase 6), the in-process
+  circuit breaker's live states (`getAllCircuitStates()`, additive),
+  and `providerAvailability` env checks. Health and circuit are
+  reported as separate, independent signals — never merged into one
+  synthesized status.
+- **“Never exercised” ≠ healthy.** A provider with no recorded attempt
+  renders `health: null` and the UI says “never exercised”. The panel
+  refuses to show OPERATIONAL for a provider that has not been called —
+  the same no-fabrication rule that governs provider adapters applies
+  to the observability surface itself.
+- **No metrics pipeline, no fake graphs.** There are no CPU/memory
+  charts because nothing records them; the page's “How to read this
+  panel” card states this explicitly. The Refresh button performs a
+  real re-check (`router.refresh()`), not a simulated polling timer.
+- **Scope:** deployment-level, not owner-scoped — the report exposes
+  provider health metadata only, never credentials or user data.
+- **Test hermeticity (found via this phase):** `vitest.setup.ts` now
+  assigns the test database, Redis URL, and fake provider keys
+  unconditionally. `??=` silently let Vitest's `.env.local` preload win,
+  running the whole suite against the dev database with real keys.
+  Tests are hermetic by construction now; `TEST_DATABASE_URL` remains
+  the escape hatch for CI.
