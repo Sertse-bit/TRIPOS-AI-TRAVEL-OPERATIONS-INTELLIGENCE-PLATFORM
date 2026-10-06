@@ -2358,7 +2358,64 @@ the project has no jsdom environment yet (Phase 27 is Testing).
 
 ## Phase 27 — Testing
 
-**Status:** Not started
+**Status:** Complete
+
+A gap survey first, then tests for the highest-value untested surfaces —
+chosen by "what breaks quietly", not by a coverage percentage.
+
+- **The survey.** 38 files / 352 tests existed at the end of Phase 22;
+  every module service with database properties, all agent boundaries,
+  and the risk scoring table were already covered. The untested surfaces
+  left were the API envelope itself, the display tone mappings, the
+  itinerary validation schemas, session token hashing, and a tail of
+  thin repository/CRUD files already exercised through their services'
+  tests.
+- **`shared/api-response.test.ts` (17 tests).** `withApiHandler` is the
+  one door every route goes through, so it **is** the API's observable
+  contract: success envelope + `x-request-id`, params forwarding,
+  each `AppError` subclass → its HTTP status, zod failures → 400 with
+  issues in `details` and a generic message, unexpected errors → a 500
+  that leaks neither message nor stack while the request id still ties
+  the response to the server log line, and the wrapper surviving a crash
+  to serve the next request. Uses real `NextRequest` objects — the thing
+  Next.js actually passes.
+- **`components/tone.test.ts` (8 tests).** A wrong tone mapping doesn't
+  crash; it paints a DOWN provider green. Every real Prisma enum value
+  (TripStatus, FlightStatus, DocumentStatus, RiskSeverity,
+  ApiHealthStatus, RecommendationStatus) and the three breaker states are
+  pinned to their tone, and unknown values are pinned to `neutral`, so a
+  new enum value forces an explicit decision here.
+- **`modules/itinerary/validation.test.ts` (14 tests).** The cost/currency
+  pairing rule is the front door of Phase 20's budget guarantee: a cost
+  without a currency, either half alone in an update, or a mixed
+  set/clear is rejected before the service can see it. The HH:MM and
+  YYYY-MM-DD regexes are pinned as format-only (matching the DB CHECK),
+  and the tests document that month plausibility and ISO-4217 lookup are
+  deliberately not the schema's job.
+- **`modules/auth/session.test.ts` (5 tests).** The critical property of
+  session tokens, with the repository stubbed: the raw token exists only
+  in the return value that becomes the cookie — the repository's
+  `token_hash` column only ever sees the SHA-256 digest — so a leaked
+  `sessions` row is useless for impersonation. Expiry ~30 days, fresh
+  token per call, and repository failures propagate instead of
+  pretending to log in.
+
+**Not done, deliberately:** Playwright E2E (the stack table's other
+choice) — this sandbox has no browser, so an E2E suite could be written
+but never honestly run; that is recorded as the limitation it is rather
+than shipping a suite that only ever runs in CI. Coverage tooling was
+likewise not added: the numbers it reports would not change what was
+tested this phase, and `vitest` coverage providers are an install away
+when wanted.
+
+**Files:** the four new test files above. No production code changed —
+that is the point: the contract tests found the envelope and schemas
+already correct, and one lint warning was the only fix.
+
+**Verification:** 438/438 tests (42 files), typecheck, lint, and build
+clean; dev and test databases both left at zero rows.
+
+**Next phase:** Phase 28 — Failure Testing.
 
 ---
 

@@ -962,9 +962,38 @@ text-sand-400                      light: #c0ac93 on #ffffff   2.20:1  fails AA
   owns `id="main-content"`; the nav owns one `aria-current="page"`
   computed by longest-prefix match in a pure module (`nav-links.ts`) so the
   rule is unit-tested rather than eyeballed. Shells are deliberately not
-  client components — only the nav is an island.
-- **What a static check cannot see is stated, not implied:** no browser
+  client components — only the nav is an island.- **What a static check cannot see is stated, not implied:** no browser
   audit ran (no Chrome in this sandbox), so focus order, tab traps, and
   screen-reader output are unverified; gradients and `text-white` on
   coloured buttons are outside the scan; dynamic class names are
   unreachable by a literal scan.
+
+## 27. Testing (Phase 27)
+
+Testing follows "what breaks quietly", not a coverage percentage. The
+suite (Vitest, real Postgres/Redis for module tests) now pins the three
+contracts whose violation would be silent:
+
+```text
+withApiHandler        → the API's observable contract: one envelope,
+                        request id in body + x-request-id header, AppError
+                        → status mapping, zod → 400 + issues, unknown →
+                        generic 500 that leaks nothing but carries the id
+tone.ts mappings      → a wrong mapping paints a DOWN provider green;
+                        every Prisma enum value is pinned, unknown values
+                        are pinned to neutral so new ones force a decision
+itinerary validation  → the cost/currency pair rule guards the budget
+                        guarantee before the service can see a broken pair
+session token hashing → the raw token exists only in the cookie value;
+                        the sessions row sees only the SHA-256 digest
+```
+
+- **No skipped tests, ever** — a test that cannot run honestly is deleted
+  or recorded as a limitation. Playwright E2E (the other stack-table
+  choice) is the standing example: written but never executable in this
+  sandbox, so it is documented as absent rather than committed green.
+- **What is not tested is stated:** repository CRUD is exercised through
+  the service tests rather than duplicated file-for-file; the WebGL
+  effect's pixels cannot be asserted without a browser (its plumbing is);
+  and coverage tooling is deliberately not installed until a number would
+  change a decision.
