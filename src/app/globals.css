@@ -48,6 +48,11 @@
   --rule: #d8d2c4;
   --rule-soft: #efe9de;
 
+  /* Decorative grid lines for the hero's distortion canvas (Phase 26).
+     Not a text token: the canvas is aria-hidden and never sits under
+     copy, so this only has to stay visually quiet in both themes. */
+  --grid-line: #3a72ac;
+
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
@@ -153,6 +158,8 @@
 
     --rule: #2a241d;
     --rule-soft: #1b1714;
+
+    --grid-line: #6198cf;
   }
 }
 

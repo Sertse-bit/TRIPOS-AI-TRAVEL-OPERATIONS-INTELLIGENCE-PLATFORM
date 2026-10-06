@@ -120,9 +120,14 @@ a restrictive `Permissions-Policy`, and a `Content-Security-Policy`. The
 CSP currently allows `'unsafe-eval'` in `script-src` because Next.js dev
 mode's hot-module-reload needs it — production builds don't, and this
 should be tightened once there's a real production build to verify
-against (Phase 30). Phase 21 (frontend) and Phase 26 (WebGL effect) may
-need to widen specific directives further; if so, widen the specific
-directive and document why here, not the policy broadly.
+against (Phase 30). Phase 21 (frontend) needed no widening
+(`withApiHandler` is a plain fetch against same-origin routes). **Phase 26
+(WebGL effect) needed no widening either**: WebGL2 itself is not a CSP
+surface, and the shaders are string literals compiled by the driver — no
+`eval`, no blob URLs, no worker, no external asset. The canvas reads a
+colour from a CSS custom property and draws; nothing is loaded from
+anywhere. If a later change needs `worker-src` or `img-src data:` for
+this effect, widen that one directive and record it here.
 
 ## File upload validation
 

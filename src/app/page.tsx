@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/auth-shell";
+import { HeroGrid } from "./hero-grid";
 
 const FEATURES = [
   {
@@ -95,9 +96,14 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Hero visual: a stylized trip board */}
-          <div className="relative">
-            <div className="overflow-hidden rounded-xl border border-sand-200 bg-white shadow-lg shadow-navy-900/5 dark:border-sand-200 dark:bg-sand-50">
+          {/*
+           * Hero visual: the trip board framed by the Phase 26 grid
+           * distortion. The board is inset so the (decorative, aria-hidden)
+           * effect shows as a live frame around it and responds to the
+           * pointer anywhere over the card.
+           */}
+          <HeroGrid className="rounded-2xl">
+            <div className="relative m-5 overflow-hidden rounded-xl border border-sand-200 bg-white shadow-lg shadow-navy-900/5 dark:border-sand-200 dark:bg-sand-50">
               <div className="flex items-center gap-1.5 border-b border-sand-200 px-4 py-3 dark:border-sand-200">
                 <span className="h-2.5 w-2.5 rounded-full bg-ok-500" />
                 <span className="h-2.5 w-2.5 rounded-full bg-warn-500" />
@@ -135,8 +141,7 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <div className="pointer-events-none absolute -bottom-4 -right-4 h-24 w-24 rounded-full border-2 border-navy-700/30 opacity-50" />
-          </div>
+          </HeroGrid>
         </section>
 
         {/* Features */}

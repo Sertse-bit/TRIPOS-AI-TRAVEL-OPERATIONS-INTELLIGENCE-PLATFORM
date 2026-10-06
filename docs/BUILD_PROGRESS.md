@@ -2301,13 +2301,58 @@ single form-level message instead of pointing at the offending field.
 
 ## Phase 26 — Grid Distortion Integration
 
-**Status:** Not started
+**Status:** Complete
 
----
+A decorative WebGL2 grid behind the landing hero, whose lines are pushed
+away from the pointer and ripple with time. It states nothing and draws
+no data — it is `aria-hidden` at the call site and never sits under copy,
+so it cannot undo Phase 25's contrast work.
 
-## Phase 26 — Grid Distortion Integration
+- **No 3D dependency.** The whole effect is one shader pair and one
+  line-list buffer (`src/components/grid-distortion.ts`). A
+  `three.js`-class engine would be a large dependency for a background
+  grid; raw WebGL2 is a little over a hundred lines here.
+- **The plumbing is testable without a GPU, and that is where the tests
+  aim.** `src/components/grid-distortion.test.ts` (17 tests) drives the
+  renderer with a recording fake `WebGL2RenderingContext`: the uploaded
+  geometry is compared against the pure builder, `drawArrays` is asserted
+  to cover exactly `vertexCount` vertices per frame, uniforms are asserted
+  by name **and** every addressed name is cross-checked against the GLSL
+  it must appear in, and each failure path (compile log, link log, missing
+  attribute, missing uniform) raises a `GridDistortionError` carrying the
+  driver's message rather than leaving a blank canvas.
+- **Handled states, all real:** WebGL2 unavailable → the always-on CSS
+  grid layer is the visual (`data-webgl="unavailable"`); shader failure →
+  logged with the driver's log (`data-webgl="failed"`);
+  `prefers-reduced-motion: reduce` → a single still frame at 0.35 strength
+  with no animation loop at all; tab hidden → the loop stops;
+  colour-scheme flip → the line colour is re-read from `--grid-line` and
+  retinted without recompiling. Device pixel ratio is clamped to 2.
+- **Integration:** the hero's trip board is inset inside the effect, so
+  the distortion reads as a live frame around the card and responds to
+  pointer movement anywhere over it.
 
-**Status:** Not started
+**Files:** `src/components/grid-distortion.ts` +
+`src/components/grid-distortion.test.ts` (new), `src/app/hero-grid.tsx`
+(new client island), `src/app/page.tsx` (hero integration),
+`src/app/globals.css` (`--grid-line` for both themes).
+
+**Verification:** 394/394 tests (38 files; 17 new), typecheck, lint, and
+build clean. Live: `/` renders the canvas (`data-webgl="pending"` before
+hydration) inside the `aria-hidden` decorative layer, with the CSS
+fallback grid and both `--grid-line` values present in the served
+stylesheet.
+
+**Known limitations (stated, not implied):** this sandbox has no browser
+and no GPU, so **the rendered pixels were never seen** — no screenshot, no
+visual diff, no frame-rate measurement. What is verified is the plumbing,
+the maths, every failure path, and the server-rendered markup; the
+shader's visual result is the one claim this phase cannot back with
+output. The island's client-side lifecycle (rAF, listeners, teardown) is
+covered by inspection and the state branches above, not by a DOM test —
+the project has no jsdom environment yet (Phase 27 is Testing).
+
+**Next phase:** Phase 27 — Testing.
 
 ---
 
