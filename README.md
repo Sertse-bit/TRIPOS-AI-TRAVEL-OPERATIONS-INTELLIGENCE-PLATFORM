@@ -104,6 +104,14 @@ metric.
   honest “never exercised”), the in-process circuit state, and whether
   a key is configured. No CPU/memory graphs, because no metrics
   pipeline exists — and the page says so instead of faking one.
+- **Audit trail** — who did what on your trips: every audited change
+  (trip edits, destinations, flights, travelers, budget, itinerary,
+  documents, Trip Watch settings) plus agent deliveries that were
+  actually persisted and watch-sweep passes, attributed honestly to
+  USER / AI_AGENT / SYSTEM. Browse all of it at `/trips/audit` or a
+  single trip's recent activity on its page; each row carries the
+  request ID that produced it, the same one in the API envelope and the
+  server logs. Reads are never logged, and nothing is ever back-filled.
 
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.

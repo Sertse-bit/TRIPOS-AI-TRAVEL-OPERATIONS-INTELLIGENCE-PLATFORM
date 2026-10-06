@@ -44,6 +44,12 @@ export default async function TripsLayout({ children }: { children: React.ReactN
               Analytics
             </Link>
             <Link
+              href="/trips/audit"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
+            >
+              Audit
+            </Link>
+            <Link
               href="/trips/observability"
               className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
             >

@@ -7,6 +7,7 @@ import { createUser, findUserByEmail } from "@/modules/auth/user-repository";
 import { createUserSession, setSessionCookie } from "@/modules/auth/session";
 import { enforceRateLimit } from "@/infrastructure/rate-limit";
 import { getEmailValidationProvider } from "@/integrations/email-validation/provider";
+import { recordUserAction } from "@/modules/audit/audit-service";
 
 function getClientIp(request: NextRequest): string {
   // x-forwarded-for may contain a chain; the first entry is the original
@@ -44,7 +45,7 @@ async function checkEmailDeliverability(email: string): Promise<void> {
   }
 }
 
-export const POST = withApiHandler(async (_requestId, log, request) => {
+export const POST = withApiHandler(async (requestId, log, request) => {
   await enforceRateLimit({
     action: "register",
     identifier: getClientIp(request),
@@ -73,6 +74,13 @@ export const POST = withApiHandler(async (_requestId, log, request) => {
   await setSessionCookie(sessionToken);
 
   log.info({ userId: user.id }, "User registered");
+  recordUserAction({
+    requestId,
+    userId: user.id,
+    action: "auth.register",
+    entityType: "user",
+    entityId: user.id,
+  });
 
   return {
     user: { id: user.id, email: user.email, name: user.name, role: user.role },

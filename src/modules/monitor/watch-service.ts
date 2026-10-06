@@ -3,6 +3,7 @@ import { ValidationError } from "@/shared/errors";
 import { emitTripEvent, getTrip } from "@/modules/trip/trip-service";
 import { type RiskSeverity } from "@/modules/risk/risk-repository";
 import { monitorTrip, type MonitorRunResult } from "@/modules/monitor/monitor-service";
+import { recordSystemAction } from "@/modules/audit/audit-service";
 
 /**
  * Trip Watch — Phase 19, the scheduling half of the monitor.
@@ -415,6 +416,14 @@ export async function runDueWatches(
     /** Omit to use the database's clock. */
     now?: Date;
     limit?: number;
+    /**
+     * Request id to stamp on the SYSTEM audit entries this sweep writes
+     * (Phase 24). The sweep is triggered by an HTTP request today, so it
+     * has a real request id to correlate its audit rows with; a future
+     * cron worker would omit this and get null — the schema's own
+     * convention for "no request produced this action".
+     */
+    auditRequestId?: string;
   } = {},
 ): Promise<WatchSweepResult> {
   // null = "evaluate due-ness against the database's own clock", which is
@@ -476,6 +485,22 @@ export async function runDueWatches(
         minimumAlertSeverity: claimed.alertMinSeverity,
       });
       await recordWatchRun(claimed.id, { runAt: now, error: null });
+      // Phase 24: the pass genuinely ran with nobody pressing anything,
+      // so it is recorded as SYSTEM — attributing it to the trip's owner
+      // would be the kind of attribution lie an audit log exists to
+      // prevent. Awaited so the sweep's report cannot outpace its own
+      // audit row; passes that were claimed-but-skipped write nothing.
+      await recordSystemAction({
+        action: "watch.sweep",
+        entityType: "trip",
+        entityId: candidate.trip_id,
+        metadata: {
+          outcome: "ran",
+          ownerId: candidate.user_id,
+          alertsRaised: monitor.alert !== null,
+        },
+        requestId: options.auditRequestId ?? null,
+      });
       passes.push({
         tripId: candidate.trip_id,
         tripTitle: candidate.title,
@@ -486,6 +511,13 @@ export async function runDueWatches(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown monitor failure";
       await recordWatchRun(claimed.id, { runAt: now, error: message });
+      await recordSystemAction({
+        action: "watch.sweep",
+        entityType: "trip",
+        entityId: candidate.trip_id,
+        metadata: { outcome: "failed", ownerId: candidate.user_id, error: message },
+        requestId: options.auditRequestId ?? null,
+      });
       passes.push({
         tripId: candidate.trip_id,
         tripTitle: candidate.title,

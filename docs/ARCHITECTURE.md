@@ -890,3 +890,46 @@ GET /api/observability   (requireAuth, deployment-level)
   running the whole suite against the dev database with real keys.
   Tests are hermetic by construction now; `TEST_DATABASE_URL` remains
   the escape hatch for CI.
+
+## 25. Audit Trail (Phase 24)
+
+`audit_logs` (present in the schema since Phase 3, unwritten until now)
+answers _who did what, when, and under which request?_
+
+```text
+writes (only after a state change actually committed)
+  USER      recordUserAction     → fire-and-forget, failure logged
+  AI_AGENT  recordAgentDelivery  → fire-and-forget, persisted only
+  SYSTEM    recordSystemAction   → awaited (watch sweeps)
+
+reads (ownership never derived from the audit rows)
+  GET /api/trips/[id]/audit  → getTrip() first  → listAuditLogsForTrips
+  GET /api/audit             → listUserTrips()  → listAuditLogsForUser
+  /trips/audit page + "Recent activity" card on the trip page
+```
+
+- **Append-only, no foreign keys.** Audit rows outlive the entities they
+  describe (and agent/system actors are not `users` rows), so nothing
+  cascades away history. The cost is that ownership cannot be joined —
+  both readers are handed trip ids that the _trip_ module already verified
+  belong to the caller.
+- **Scope is explicit and asymmetric.** A trip's trail is strictly
+  trip-scoped (matched on `metadata->>'tripId'` or the trip as the entity).
+  The user-wide stream additionally includes the caller's own `USER` rows
+  by actor id, which is the only way account-level actions
+  (`auth.register`, `auth.login`, `notification.read`) appear at all —
+  they name no trip, and recording them into invisibility would be
+  pointless. A test pins both halves of that rule.
+- **Honest attribution.** A watch sweep runs with nobody behind it, so
+  it is written as `SYSTEM` with a null actor rather than attributed to
+  the trip's owner. Nothing is written for an attempt that changed no
+  state (an unchanged flight, a non-significant weather reading, a
+  refused LLM call), so the log cannot claim work that did not happen.
+- **One id, three places.** `requestId` is the same value the API
+  envelope (`withApiHandler`) and the structured log line carry. A cron
+  worker with no HTTP request writes `null` — the schema's own convention.
+- **Failure policy is stated, not hidden.** The USER/AGENT writers are
+  fire-and-forget by design (a lost audit row is a smaller failure than a
+  mutation that appears to have failed after committing) and log at warn;
+  the SYSTEM writer is awaited because a sweep is already background work
+  whose own report must not outpace its audit row.

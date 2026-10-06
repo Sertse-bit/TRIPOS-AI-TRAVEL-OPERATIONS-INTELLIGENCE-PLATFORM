@@ -5,6 +5,7 @@ import {
   listTripRecommendations,
 } from "@/modules/risk/recommendation-service";
 import { explainTripRisk } from "@/ai/agents/risk-agent";
+import { auditAgentDelivery } from "@/modules/audit/route-audit";
 
 /**
  * Generates an explanation of the trip's stored risk assessment and
@@ -14,11 +15,24 @@ import { explainTripRisk } from "@/ai/agents/risk-agent";
  * RECOMMENDATION_CREATED event. The deterministic score itself is not
  * touched — see `/api/trips/[id]/risk`, which computes it.
  */
-export const POST = withApiHandler(async (_requestId, log, _request, context: RouteContext) => {
+export const POST = withApiHandler(async (requestId, log, _request, context: RouteContext) => {
   const user = await requireAuth();
   const { id } = await context.params;
 
   const result = await generateTripRecommendation(id, user.id);
+  auditAgentDelivery({
+    requestId,
+    userId: user.id,
+    agentName: "risk_agent",
+    tripId: id,
+    action: "recommendation.created",
+    entityType: "recommendation",
+    entityId: result.recommendation.id,
+    metadata: {
+      severity: result.severity,
+      riskAssessmentId: result.recommendation.riskAssessmentId,
+    },
+  });
 
   log.info(
     {

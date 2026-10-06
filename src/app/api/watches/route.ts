@@ -21,9 +21,11 @@ export const GET = withApiHandler(async () => {
   return { watches, due };
 });
 
-export const POST = withApiHandler(async (_requestId, log) => {
+export const POST = withApiHandler(async (requestId, log) => {
   const user = await requireAuth();
-  const result = await runDueWatches({ ownerId: user.id });
+  // The request id rides along so each SYSTEM audit entry the sweep
+  // writes correlates with the request that triggered it.
+  const result = await runDueWatches({ ownerId: user.id, auditRequestId: requestId });
 
   log.info(
     {

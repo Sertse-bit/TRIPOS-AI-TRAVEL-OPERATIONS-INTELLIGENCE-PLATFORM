@@ -2,6 +2,8 @@ import { z } from "zod";
 import { withApiHandler, type RouteContext } from "@/shared/api-response";
 import { requireAuth } from "@/modules/auth/access-control";
 import { getTripWatch, upsertTripWatch } from "@/modules/monitor/watch-service";
+import { getTrip } from "@/modules/trip/trip-service";
+import { auditWatchUpserted } from "@/modules/audit/route-audit";
 
 /**
  * Trip Watch preferences for one trip (Phase 19).
@@ -28,12 +30,14 @@ const bodySchema = z.object({
   alertMinSeverity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
 });
 
-export const PUT = withApiHandler(async (_requestId, log, request, context: RouteContext) => {
+export const PUT = withApiHandler(async (requestId, log, request, context: RouteContext) => {
   const user = await requireAuth();
   const { id } = await context.params;
   const body = bodySchema.parse(await request.json());
 
   const watch = await upsertTripWatch(id, user.id, body);
+  const trip = await getTrip(id, user.id);
+  auditWatchUpserted({ requestId, userId: user.id, trip, watch });
 
   log.info(
     {

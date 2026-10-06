@@ -7,13 +7,14 @@ import { hashPassword, verifyPassword } from "@/modules/auth/password";
 import { findUserByEmail } from "@/modules/auth/user-repository";
 import { createUserSession, setSessionCookie } from "@/modules/auth/session";
 import { enforceRateLimit } from "@/infrastructure/rate-limit";
+import { recordUserAction } from "@/modules/audit/audit-service";
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() ?? "unknown";
 }
 
-export const POST = withApiHandler(async (_requestId, log, request) => {
+export const POST = withApiHandler(async (requestId, log, request) => {
   const body = await request.json();
   const input = loginSchema.parse(body);
 
@@ -53,6 +54,13 @@ export const POST = withApiHandler(async (_requestId, log, request) => {
   await setSessionCookie(sessionToken);
 
   log.info({ userId: user.id }, "User logged in");
+  recordUserAction({
+    requestId,
+    userId: user.id,
+    action: "auth.login",
+    entityType: "user",
+    entityId: user.id,
+  });
 
   return {
     user: { id: user.id, email: user.email, name: user.name, role: user.role },

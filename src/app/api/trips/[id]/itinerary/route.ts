@@ -2,6 +2,8 @@ import { withApiHandler, type RouteContext } from "@/shared/api-response";
 import { requireAuth } from "@/modules/auth/access-control";
 import { addItineraryItem, listTripItinerary } from "@/modules/itinerary/itinerary-service";
 import { addItineraryItemSchema } from "@/modules/itinerary/validation";
+import { getTrip } from "@/modules/trip/trip-service";
+import { auditItineraryItemAdded } from "@/modules/audit/route-audit";
 
 /**
  * A trip's itinerary (Phase 20).
@@ -17,12 +19,21 @@ export const GET = withApiHandler(async (_requestId, _log, _request, context: Ro
   return listTripItinerary(id, user.id);
 });
 
-export const POST = withApiHandler(async (_requestId, log, request, context: RouteContext) => {
+export const POST = withApiHandler(async (requestId, log, request, context: RouteContext) => {
   const user = await requireAuth();
   const { id } = await context.params;
   const body = addItineraryItemSchema.parse(await request.json());
 
   const item = await addItineraryItem(id, user.id, body);
+  const trip = await getTrip(id, user.id);
+  auditItineraryItemAdded({
+    requestId,
+    userId: user.id,
+    trip,
+    itemId: item.id,
+    itemType: item.itemType,
+    source: "traveler",
+  });
 
   log.info(
     { tripId: id, itemId: item.id, day: item.itineraryDay, itemType: item.itemType },

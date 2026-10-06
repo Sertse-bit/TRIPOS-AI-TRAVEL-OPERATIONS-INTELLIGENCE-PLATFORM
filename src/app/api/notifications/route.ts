@@ -6,6 +6,7 @@ import {
   findNotificationsByUserId,
   markNotificationRead,
 } from "@/modules/notification/notification-service";
+import { auditNotificationRead } from "@/modules/audit/route-audit";
 
 /** The caller's notifications, newest first, with an unread count. */
 export const GET = withApiHandler(async () => {
@@ -27,9 +28,13 @@ const bodySchema = z.object({
  * someone else, or was already read — all three are the same answer, so
  * this can't be used to probe for other users' notification ids.
  */
-export const PATCH = withApiHandler(async (_requestId, _log, request) => {
+export const PATCH = withApiHandler(async (requestId, _log, request) => {
   const user = await requireAuth();
   const { notificationId } = bodySchema.parse(await request.json());
   const updated = await markNotificationRead(user.id, notificationId);
+  // Recorded even when updated=false: the audit row reports what the
+  // request actually did (nothing), same honest-reporting principle the
+  // endpoint's response follows.
+  auditNotificationRead({ requestId, userId: user.id, notificationId, updated });
   return { updated };
 });

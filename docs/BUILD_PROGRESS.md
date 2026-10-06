@@ -1948,8 +1948,8 @@ The next unstarted phase is Phase 22 — Command Bar.
 - No document upload UI yet: the documents section renders what the
   digital twin returns, but the upload/storage + extraction pipeline is
   Phase 14 (not started).
-- Command bar (Phase 22) and the observability panel (Phase 23) are
-  done. The audit-trail view (Phase 24) is still ahead.
+- Command bar (Phase 22), the observability panel (Phase 23), and the
+  audit trail (Phase 24) are done.
 
 **Next phase:** Phase 14 — Document Intelligence (backend), with the
 frontend surface for it to follow.
@@ -2142,7 +2142,87 @@ layer.
 
 ## Phase 24 — Audit Trail
 
-**Status:** Not started
+**Status:** Complete
+
+The `audit_logs` table existed since Phase 3 (with its `ActorType` enum
+and `requestId` correlation column) but had no writer and no reader.
+Phase 24 gives it both, and records only things that genuinely happened:
+
+- **`audit-repository.ts`** — the only code that reads or writes
+  `audit_logs`. `insertAuditLog` casts the enum explicitly
+  (`$1::"ActorType"`) per the raw-SQL rule. Two scoped readers:
+  `listAuditLogsForTrips` (a trip's own history) and
+  `listAuditLogsForUser` (the caller's whole stream). The table
+  deliberately has **no foreign keys** (agent/system actors are not rows
+  in `users`), so ownership is never re-derived from the rows: the trip
+  id set comes from the trip module's own ownership-checked queries.
+  Both readers share one WHERE clause between their COUNT and page
+  query, so `total` describes exactly the rows being paged.
+- **Three actors, three honest attributions.** `recordUserAction`
+  (USER, fire-and-forget — an audit write must never be the reason a
+  committed mutation appears to have failed; failures log at warn),
+  `recordAgentDelivery` (AI_AGENT, only after a delivery was actually
+  persisted), and `recordSystemAction` (SYSTEM — a watch-sweep pass has
+  nobody behind it, and attributing it to the trip's owner would be the
+  attribution lie an audit log exists to prevent; this one is awaited).
+- **What is audited:** 24 actions across trip lifecycle, documents,
+  itinerary/budget, notifications, auth, Trip Watch, and persisted
+  agent deliveries — see `AuditAction` in `audit-service.ts`. Reads are
+  never audited, and nothing is invented for an attempt that changed no
+  state.
+- **One id in three places.** Every row carries the request id from
+  `withApiHandler`, tying the audit row to the API envelope and the
+  structured log line. A future cron worker would write `requestId:
+null` — the schema's own convention for "no request produced this".
+- **Two surfaces.** `/trips/audit` (the traveler's whole stream) and a
+  "Recent activity" card on the trip page (that trip only, newest
+  first). `GET /api/audit` and `GET /api/trips/[id]/audit` expose the
+  same data (`?limit` 1–100 default 50, `?offset`, `?actorType`).
+- **Scope rule, stated in the code:** a trip's trail is strictly
+  trip-scoped — an account-level action (sign-in, marking an alert read)
+  is not one trip's history. The user-wide stream is wider but still
+  strictly the caller's own: their own USER rows by actor id, plus every
+  row naming one of their trips or naming them as the subject user.
+
+**Files:** `src/modules/audit/{audit-repository,audit-service,route-audit}.ts`
+(new) + `audit-service.test.ts` (new, 9 tests), `src/app/api/audit/route.ts`
+and `src/app/api/trips/[id]/audit/route.ts` (new),
+`src/app/trips/audit/page.tsx` + `src/app/trips/audit-view.tsx` (new),
+22 existing route handlers wired via `route-audit.ts` helpers,
+`src/modules/monitor/watch-service.ts` (`auditRequestId` + SYSTEM rows),
+`src/app/trips/layout.tsx` (Audit nav link), `src/app/trips/[id]/page.tsx`
+(recent-activity card).
+
+**Verification:** 366/366 tests (36 files), typecheck, lint, and build
+clean. Live-smoked on the preview: register → `auth.register` row visible
+on `/api/audit` with a null-trip shape; create trip / add destination /
+PATCH title → three trip-scoped rows with `tripTitle` and `changedFields`
+in metadata; `?actorType=USER&limit=2` → `total=3, entries=2`; the user
+stream showed 5 (including `auth.login` and `auth.register`, which are
+correctly absent from the trip trail); unauthenticated → 401 on both
+endpoints; a second user got **404** on the trip's API _and_ page; the
+second user's stream contained only their own row. `/trips/audit` and
+`/trips/[id]` rendered 200 with the expected headings, action labels, trip
+titles, and request ids. Smoke rows and users deleted afterward (dev
+`audit_logs`, `users`, `trips`, `trip_events`, `destinations` all back to
+0).
+
+**Found and fixed during this phase — test pollution from the new
+writer.** `runDueWatches` now writes a SYSTEM `watch.sweep` row per pass,
+and `audit_logs` has no foreign keys — so `watch-service.test.ts`'s
+existing "delete the users" cleanup no longer cascaded them away (10
+rows were left in `tripos_test` after a run). That cleanup now deletes
+by actor, owner metadata, and entity before deleting the users; a second
+full run left `audit_logs` empty.
+
+**Known limitations:** there is no pagination UI (the pages render the
+first page and state how many entries exist); nothing prunes the log —
+append-only by design, retention is a deployment concern (Phase 30/31);
+the trail shows actions, not field-level diffs (metadata carries what the
+route could summarize cheaply); actions performed before this phase are
+simply absent, and the empty state says the log never back-fills.
+
+**Next phase:** Phase 25 — Accessibility.
 
 ---
 

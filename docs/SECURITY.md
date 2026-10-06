@@ -58,6 +58,22 @@ not built yet**, since no resource-owning routes exist until Phase 7's
 Trip Service. It will use this same `AppError`/`UnauthorizedError`
 pattern when it lands, not a separate mechanism.
 
+### Audit logging (Phase 24)
+
+`audit_logs` records who did what, and both readers are scoped through
+the trip module's own ownership checks, never through the audit rows
+(the table has no foreign keys — see `docs/DATABASE.md`): a stranger's
+trip is a 404 on `/api/trips/[id]/audit` exactly as everywhere else, and
+`/api/audit` is hard-scoped to the caller's own trips plus their own
+USER rows. There is no unscoped or cross-user audit endpoint over HTTP.
+Metadata is deliberately shallow and identifying (titles, codes,
+outcomes) — never request bodies or credentials, so the log cannot become
+a second resting place for secrets. Auth events (`auth.register`,
+`auth.login`, `auth.logout`) are recorded with the request id that
+produced them; failed logins are not audited (they leave a rate-limit +
+warn-log trail instead, and the audit log is for state changes, not
+attempts).
+
 ## Rate limiting
 
 `src/infrastructure/rate-limit.ts` — Redis-backed fixed-window counters.

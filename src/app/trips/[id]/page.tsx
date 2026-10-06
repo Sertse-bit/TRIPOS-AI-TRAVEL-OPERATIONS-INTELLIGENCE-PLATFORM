@@ -6,6 +6,7 @@ import { getTripIndexStatus } from "@/modules/trip/rag-service";
 import { getLatestTripRisk } from "@/modules/risk/risk-service";
 import { listTripRecommendations } from "@/modules/risk/recommendation-service";
 import { getTripWatch } from "@/modules/monitor/watch-service";
+import { getTripAuditTrail } from "@/modules/audit/audit-service";
 import { providerAvailability } from "@/config/env";
 import { Card, EmptyState, SectionHeading, StatusBadge } from "@/components/ui";
 import {
@@ -32,6 +33,7 @@ import {
 } from "./trip-actions";
 import { OperationalStateBanner } from "./operational-state-banner";
 import { CommandBar } from "./command-bar";
+import { AuditEntryRow } from "../audit-view";
 
 function fmtDate(d: Date | string): string {
   return new Date(d).toLocaleDateString(undefined, {
@@ -141,6 +143,10 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const latestRisk = await orNotFound(() => getLatestTripRisk(id, user.id));
   const recommendations = await orNotFound(() => listTripRecommendations(id, user.id));
   const watch = await orNotFound(() => getTripWatch(id, user.id));
+  // Phase 24: this trip's own audit trail, newest first. Trip-scoped —
+  // account-level actions (sign-in, marking an alert read) belong to the
+  // user-wide stream at /trips/audit, not to one trip's history.
+  const audit = await orNotFound(() => getTripAuditTrail(id, user.id, { limit: 8 }));
   const { trip, travelers, destinations, flights, documents } = twin;
 
   return (
@@ -488,6 +494,44 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
               ))}
             </ul>
           </div>
+        )}
+      </Card>
+
+      {/* Recent activity (Phase 24) — who did what, from the audit log */}
+      <Card className="mt-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <SectionHeading>Recent activity</SectionHeading>
+            <p className="mt-1.5 text-sm text-sand-600">
+              Every audited change to this trip: your own actions, agent deliveries that were
+              actually persisted, and watch sweeps. Each row shows what ran and under which request
+              ID — reads are not logged.
+            </p>
+          </div>
+          <Link
+            href="/trips/audit"
+            className="flex-none text-xs text-sand-500 underline underline-offset-2 hover:text-sand-700"
+          >
+            All activity →
+          </Link>
+        </div>
+        {audit.entries.length === 0 ? (
+          <EmptyState>
+            <span className="mt-3 block">
+              Nothing recorded for this trip yet. Changes made from here on are logged.
+            </span>
+          </EmptyState>
+        ) : (
+          <ul className="mt-3 divide-y divide-sand-200 dark:divide-sand-200">
+            {audit.entries.map((entry) => (
+              <AuditEntryRow key={entry.id} entry={entry} />
+            ))}
+          </ul>
+        )}
+        {audit.total > audit.entries.length && (
+          <p className="mt-3 text-xs text-sand-400">
+            Showing the {audit.entries.length} most recent of {audit.total} entries.
+          </p>
         )}
       </Card>
 

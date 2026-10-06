@@ -138,6 +138,17 @@ async function cleanupTestUsers(): Promise<void> {
     `DELETE FROM trip_documents WHERE uploaded_by IN (SELECT id FROM users WHERE email IN ($1, $2))`,
     [OWNER_EMAIL, OTHER_EMAIL],
   );
+  // runDueWatches writes a SYSTEM `watch.sweep` audit row per pass (Phase
+  // 24), and audit_logs deliberately has no foreign keys — so deleting the
+  // users does NOT cascade these away. They are removed explicitly, by
+  // entity, owner metadata, and actor, before the users themselves go.
+  await pool.query(
+    `DELETE FROM audit_logs
+      WHERE actor_id IN (SELECT id::text FROM users WHERE email IN ($1, $2))
+         OR metadata->>'ownerId' IN (SELECT id::text FROM users WHERE email IN ($1, $2))
+         OR entity_id IN (SELECT id FROM trips WHERE user_id IN (SELECT id FROM users WHERE email IN ($1, $2)))`,
+    [OWNER_EMAIL, OTHER_EMAIL],
+  );
   await pool.query(`DELETE FROM users WHERE email IN ($1, $2)`, [OWNER_EMAIL, OTHER_EMAIL]);
 }
 

@@ -1,8 +1,9 @@
 import { withApiHandler, type RouteContext } from "@/shared/api-response";
 import { requireAuth } from "@/modules/auth/access-control";
 import { uploadTripDocument } from "@/modules/trip/document-service";
-import { getTripDocuments } from "@/modules/trip/trip-service";
+import { getTrip, getTripDocuments } from "@/modules/trip/trip-service";
 import { ValidationError } from "@/shared/errors";
+import { auditDocumentUploaded } from "@/modules/audit/route-audit";
 
 export const GET = withApiHandler(async (_requestId, _log, _request, context: RouteContext) => {
   const user = await requireAuth();
@@ -17,7 +18,7 @@ export const GET = withApiHandler(async (_requestId, _log, _request, context: Ro
  * magic bytes and rejects a mismatch, so the client can't get a JPEG
  * stored as a PDF by lying about its type.
  */
-export const POST = withApiHandler(async (_requestId, log, request, context: RouteContext) => {
+export const POST = withApiHandler(async (requestId, log, request, context: RouteContext) => {
   const user = await requireAuth();
   const { id } = await context.params;
 
@@ -38,6 +39,14 @@ export const POST = withApiHandler(async (_requestId, log, request, context: Rou
     buffer,
     filename: file.name,
     declaredMimeType: file.type,
+  });
+  const trip = await getTrip(id, user.id);
+  auditDocumentUploaded({
+    requestId,
+    userId: user.id,
+    trip,
+    documentId: document.id,
+    status: document.status,
   });
 
   log.info(

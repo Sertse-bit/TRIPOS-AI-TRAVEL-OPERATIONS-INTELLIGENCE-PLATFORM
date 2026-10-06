@@ -139,6 +139,16 @@ FK-linked): audit entries reference arbitrary entity types polymorphically
 by `(entity_type, entity_id)` rather than a single foreign key, and
 `api_health` tracks providers, not domain entities.
 
+**Reading `audit_logs` without FKs (Phase 24).** Because no join to
+`trips` exists, ownership can never be re-derived from an audit row.
+Both readers are handed trip ids the trip module already verified:
+`listAuditLogsForTrips` matches on `metadata->>'tripId'` or the trip
+being the entity, and `listAuditLogsForUser` additionally matches the
+caller's own `USER` rows by `actor_id` (and `metadata->>'userId'`), so
+account-level actions that name no trip still appear on the user's own
+stream. The `ActorType` cast is explicit (`::"ActorType"`) on every
+write and filter, per the raw-SQL enum rule.
+
 ## Design decisions worth explaining
 
 **Append-only snapshot tables, not mutable status columns.**
