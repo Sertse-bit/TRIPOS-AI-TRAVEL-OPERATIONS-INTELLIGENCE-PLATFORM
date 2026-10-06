@@ -33,12 +33,12 @@ export default async function WatchesPage() {
 
   return (
     <div>
-      <Link href="/trips" className="text-sm text-sand-500 underline-offset-2 hover:underline">
+      <Link href="/trips" className="text-sm text-sand-600 underline-offset-2 hover:underline">
         ← All trips
       </Link>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             Trip Watch
           </h1>
           <p className="mt-1 text-sm text-sand-600">
@@ -79,11 +79,11 @@ export default async function WatchesPage() {
                   <div className="min-w-0">
                     <Link
                       href={`/trips/${watch.tripId}`}
-                      className="font-medium text-navy-950 underline-offset-2 hover:underline dark:text-navy-100"
+                      className="font-medium text-navy-950 underline-offset-2 hover:underline dark:text-sand-800"
                     >
                       {watch.tripTitle}
                     </Link>
-                    <p className="mt-0.5 text-xs text-sand-500">
+                    <p className="mt-0.5 text-xs text-sand-600">
                       {watch.enabled
                         ? `Every ${watch.intervalMinutes} minutes · ${
                             watch.due ? "due now" : `next ${fmtDateTime(watch.nextRunAt)}`

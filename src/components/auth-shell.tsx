@@ -11,6 +11,9 @@ export function LogoMark({ size = "md" }: { size?: "md" | "sm" }) {
         className={`flex ${box} items-center justify-center rounded-md bg-navy-900 text-white dark:bg-navy-700`}
       >
         <svg
+          // Decorative: the wordmark's text already names the link, so the
+          // glyph is hidden from assistive tech rather than announced.
+          aria-hidden="true"
           className={icon}
           viewBox="0 0 24 24"
           fill="none"
@@ -23,7 +26,7 @@ export function LogoMark({ size = "md" }: { size?: "md" | "sm" }) {
           <path d="M12 7v5l3 2" />
         </svg>
       </span>
-      <span className="text-base font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+      <span className="text-base font-semibold tracking-tight text-navy-950 dark:text-sand-800">
         Trip<span className="text-navy-700 dark:text-navy-500">OS</span>
       </span>
     </span>
@@ -55,9 +58,9 @@ export function AuthShell({
         </Link>
       </header>
 
-      <main className="mx-auto w-full max-w-md flex-1 px-6 pb-16 pt-10">
+      <main id="main-content" className="mx-auto w-full max-w-md flex-1 px-6 pb-16 pt-10">
         <div className="rounded-xl border border-sand-200 bg-white p-6 shadow-sm dark:border-sand-200 dark:bg-sand-50 md:p-8">
-          <h1 className="text-xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="text-xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             {title}
           </h1>
           <p className="mt-1.5 text-sm text-sand-600">{subtitle}</p>
@@ -66,7 +69,7 @@ export function AuthShell({
         <div className="mt-4 text-center text-sm text-sand-600">{footer}</div>
       </main>
 
-      <footer className="border-t border-sand-200 px-6 py-4 text-center text-xs text-sand-400 dark:border-sand-200">
+      <footer className="border-t border-sand-200 px-6 py-4 text-center text-xs text-sand-600 dark:border-sand-200">
         Sessions are hashed server-side, stored in Postgres, and revocable.
       </footer>
     </div>

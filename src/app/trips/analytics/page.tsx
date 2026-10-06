@@ -28,7 +28,7 @@ export default async function AnalyticsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+      <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
         Analytics
       </h1>
       <p className="mt-1 text-sm text-sand-600">
@@ -38,10 +38,10 @@ export default async function AnalyticsPage() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>
-            <p className="text-3xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+            <p className="text-3xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
               {s.value}
             </p>
-            <p className="mt-1 text-xs font-medium uppercase tracking-widest text-sand-500">
+            <p className="mt-1 text-xs font-medium uppercase tracking-widest text-sand-600">
               {s.label}
             </p>
           </Card>
@@ -51,7 +51,7 @@ export default async function AnalyticsPage() {
       <Card className="mt-6">
         <SectionHeading>Trips by status</SectionHeading>
         {trips.length === 0 ? (
-          <p className="mt-2 text-sm text-sand-500">No trips yet.</p>
+          <p className="mt-2 text-sm text-sand-600">No trips yet.</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {trips.map((trip) => (

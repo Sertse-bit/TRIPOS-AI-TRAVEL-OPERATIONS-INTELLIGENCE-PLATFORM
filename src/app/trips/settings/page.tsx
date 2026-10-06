@@ -24,7 +24,7 @@ function SettingsView({
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+      <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
         Settings
       </h1>
       <p className="mt-1 text-sm text-sand-600">
@@ -37,16 +37,16 @@ function SettingsView({
           <SectionHeading>Account</SectionHeading>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-sand-500">Name</dt>
-              <dd className="font-medium text-navy-950 dark:text-navy-100">{userName}</dd>
+              <dt className="text-sand-600">Name</dt>
+              <dd className="font-medium text-navy-950 dark:text-sand-800">{userName}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-sand-500">Email</dt>
-              <dd className="font-medium text-navy-950 dark:text-navy-100">{userEmail}</dd>
+              <dt className="text-sand-600">Email</dt>
+              <dd className="font-medium text-navy-950 dark:text-sand-800">{userEmail}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-sand-500">Role</dt>
-              <dd className="font-medium text-navy-950 dark:text-navy-100">{userRole}</dd>
+              <dt className="text-sand-600">Role</dt>
+              <dd className="font-medium text-navy-950 dark:text-sand-800">{userRole}</dd>
             </div>
           </dl>
         </Card>
@@ -61,16 +61,16 @@ function SettingsView({
                 key={name}
                 className="flex items-center justify-between rounded-lg border border-sand-200 px-3 py-2 dark:border-sand-200"
               >
-                <span className="font-mono text-sm text-navy-950 dark:text-navy-100">{name}</span>
+                <span className="font-mono text-sm text-navy-950 dark:text-sand-800">{name}</span>
                 <span
-                  className={`text-xs font-semibold ${available ? "text-ok-600" : "text-sand-400"}`}
+                  className={`text-xs font-semibold ${available ? "text-ok-600" : "text-sand-600"}`}
                 >
                   {available ? "Configured" : "Not configured"}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-sand-400">
+          <p className="mt-3 text-xs text-sand-600">
             Availability reflects real env-var presence, read from the server at request time. Most
             unconfigured providers fall back to a documented mock adapter that says so in its own
             output. Anthropic is the exception: it has no mock, because a fabricated explanation of

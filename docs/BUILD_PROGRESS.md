@@ -2228,6 +2228,79 @@ simply absent, and the empty state says the log never back-fills.
 
 ## Phase 25 — Accessibility
 
+**Status:** Complete
+
+The UI had never been measured, and measuring it found a theme-breaking
+failure rather than a set of small ones. Full detail lives in the new
+`docs/ACCESSIBILITY.md`; the short version:
+
+- **Dark mode was unreadable.** `dark:text-navy-100` (53 uses) resolved to
+  `#1b2738` on `#1a1714` — **1.06:1**. Every heading, card title, and
+  value in dark mode was effectively invisible. The dark tokens invert
+  the palette scale, so the light-mode "strong text" token is a _surface_
+  in dark mode; the fix is the token that is light in dark mode
+  (`dark:text-sand-800`, 9.49:1 worst case).
+- **Muted text failed AA in both themes.** `text-sand-500` (57 uses,
+  2.88–3.30:1) and `text-sand-400` (24 uses, 1.92–2.20:1) were decorative
+  steps used as body text; both are now `sand-600` (4.51:1 light /
+  4.82:1 dark worst case).
+- **Two dark tokens were nudged** so they clear AA on every surface they
+  can land on: `--navy-500` `#5589bf` → `#6198cf` (was 3.87:1 on the dark
+  hover surface, 4.10:1 on its own chip) and `--alert-500` `#e06f54` →
+  `#e5765c` (was 4.45:1). Light mode is otherwise untouched.
+- **Two dead classes were live bugs:** `bg-navy-50` and `border-navy-300`
+  are not tokens in `globals.css`, so Tailwind generated nothing for them
+  (an unstyled panel and a hover border that never changed). Replaced with
+  real tokens.
+- **Structure and interaction:** a skip link as the first focusable
+  element of the document (`#main-content` on every shell's `<main>`),
+  `aria-label="Primary"` on both navs, exactly one `aria-current="page"`
+  via `currentNavHref` (longest match — a trip detail page marks the
+  section root, not every ancestor), `Button busy` → `aria-busy`, form
+  messages as live regions (`role="alert"`/`role="status"`), `InlineError`
+  as an alert, `TextField` with explicit `label[for]`/`id` plus
+  `aria-invalid`/`aria-describedby` when given a field error, decorative
+  SVGs `aria-hidden`, a viewport declaration, and a
+  `prefers-reduced-motion` block neutralising hover transitions.
+- **Contrast cannot be re-broken silently.** `src/app/accessibility.test.ts`
+  (11 tests) implements WCAG luminance, parses both theme token maps out
+  of `globals.css`, checks the eight status-chip pairs, asserts every
+  palette class in `src/app`+`src/components` resolves to a declared
+  token, and computes worst-case contrast for every text class in the
+  theme it applies to — failing with the offenders listed. Two sanity
+  assertions keep the scan from passing vacuously.
+
+**Files:** `src/app/accessibility.test.ts`, `docs/ACCESSIBILITY.md`
+(new); `src/app/globals.css` (two tokens + reduced motion),
+`src/app/layout.tsx` (skip link + viewport), `src/app/trips/nav.tsx` +
+`nav-links.ts` (new), `src/app/trips/layout.tsx`,
+`src/components/ui.tsx` (Button busy, FormMessage roles, InlineError,
+TextField), `src/components/auth-shell.tsx`, `src/app/page.tsx`, and the
+colour-token sweep across 20 UI files.
+
+**Verification:** 376/376 tests (37 files; 11 of them the new guard),
+typecheck, lint, and build clean. Live on the preview: `/` and `/login`
+both carry the skip link and `main#main-content` (the login form's labels
+render as real `label[for]` pairs), `/trips/audit` marks exactly one link
+`aria-current="page"` and it is the Audit link, a trip detail page marks
+`/trips` instead, and the served stylesheet contains both new dark tokens
+and the dark media block. Smoke user and rows deleted afterward.
+
+**Known limitations:** no browser-based audit ran — the sandbox has no
+Chrome and no DOM test environment, so there is no axe run, no focus-order
+or tab-trap verification, and no screen-reader announcement testing.
+Contrast is enforced for palette tokens only (`text-white` on coloured
+buttons, gradients, and runtime-built colours are outside the scan), and a
+literal class scan cannot evaluate dynamic class names — the sanity
+assertions make that visible rather than silent. Most forms still surface a
+single form-level message instead of pointing at the offending field.
+
+**Next phase:** Phase 26 — Grid Distortion Integration.
+
+---
+
+## Phase 26 — Grid Distortion Integration
+
 **Status:** Not started
 
 ---

@@ -55,7 +55,7 @@ function RegisterForm() {
           Already have an account?{" "}
           <Link
             href={`/login${returnTo !== "/trips" ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`}
-            className="font-medium text-navy-700 underline-offset-2 hover:underline dark:text-navy-500"
+            className="font-medium text-navy-700 dark:text-navy-500 underline-offset-2 hover:underline dark:text-navy-500"
           >
             Sign in
           </Link>
@@ -90,11 +90,11 @@ function RegisterForm() {
             minLength={12}
             onChange={(value) => setPassword(value)}
           />
-          <p className={`mt-1 text-xs ${passwordTooShort ? "text-alert-600" : "text-sand-400"}`}>
+          <p className={`mt-1 text-xs ${passwordTooShort ? "text-alert-600" : "text-sand-600"}`}>
             At least 12 characters. Length matters more than symbol soup.
           </p>
         </div>
-        <Button type="submit" disabled={busy || passwordTooShort} className="h-10 w-full">
+        <Button type="submit" busy={busy} disabled={passwordTooShort} className="h-10 w-full">
           {busy ? "Creating account…" : "Create account"}
         </Button>
         <FormMessage message={message} />

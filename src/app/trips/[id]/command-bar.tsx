@@ -77,7 +77,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
     <Card className="mt-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <SectionHeading>Command bar</SectionHeading>
-        <span className="text-xs text-sand-400">Answers cite the tool calls they came from</span>
+        <span className="text-xs text-sand-600">Answers cite the tool calls they came from</span>
       </div>
       <p className="mt-1.5 text-sm text-sand-600">
         Ask a question or give an instruction about this trip. The answer is composed only from
@@ -104,10 +104,10 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
             disabled={!aiEnabled || busy}
             maxLength={500}
             placeholder="e.g. Is my flight on time, and does the weather threaten anything?"
-            className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm text-foreground outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sand-200 dark:bg-sand-50"
+            className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm text-foreground outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sand-200 dark:bg-sand-50"
           />
         </label>
-        <Button type="submit" disabled={!aiEnabled || busy || command.trim().length === 0}>
+        <Button type="submit" busy={busy} disabled={!aiEnabled || command.trim().length === 0}>
           {busy ? "Working…" : "Run"}
         </Button>
       </form>
@@ -123,7 +123,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
                 setCommand(example);
                 void runCommand(example);
               }}
-              className="rounded-full border border-sand-200 px-2.5 py-1 text-xs text-sand-600 transition hover:border-navy-300 hover:text-navy-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-sand-200 px-2.5 py-1 text-xs text-sand-600 transition hover:border-navy-500 hover:text-navy-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {example}
             </button>
@@ -132,7 +132,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
       )}
 
       {busy && (
-        <p role="status" className="mt-3 text-sm text-sand-500">
+        <p role="status" className="mt-3 text-sm text-sand-600">
           Running real checks against this trip&apos;s providers — this can take a few seconds…
         </p>
       )}
@@ -141,11 +141,11 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
 
       {result && (
         <div role="status" aria-live="polite" className="mt-4 space-y-3">
-          <div className="rounded-lg border border-navy-200 bg-navy-50/60 p-4 dark:border-navy-200 dark:bg-navy-50/60">
-            <p className="text-base font-semibold text-navy-950 dark:text-navy-100">
+          <div className="rounded-lg border border-navy-200 bg-navy-100/60 p-4 dark:border-navy-200 dark:bg-navy-100/60">
+            <p className="text-base font-semibold text-navy-950 dark:text-sand-800">
               {result.decision}
             </p>
-            <p className="mt-1 text-xs text-sand-500">
+            <p className="mt-1 text-xs text-sand-600">
               command: “{result.command}” · confidence {confidencePercent(result.confidence)}
             </p>
             <div
@@ -160,10 +160,10 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
           </div>
 
           <div className="rounded-lg border border-sand-200 p-4 dark:border-sand-200">
-            <p className="text-xs font-semibold uppercase tracking-wide text-sand-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sand-600">
               Recommended action
             </p>
-            <p className="mt-1 text-sm text-navy-950 dark:text-navy-100">
+            <p className="mt-1 text-sm text-navy-950 dark:text-sand-800">
               {result.recommendationText}
             </p>
             <p className="mt-2 text-sm text-sand-700 dark:text-sand-600">
@@ -173,7 +173,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
 
           {result.evidence.length > 0 && (
             <div className="rounded-lg border border-sand-200 p-4 dark:border-sand-200">
-              <p className="text-xs font-semibold uppercase tracking-wide text-sand-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sand-600">
                 Evidence — what was actually checked
               </p>
               <ul className="mt-2 space-y-1.5">
@@ -182,7 +182,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
                     <span className="mr-2 rounded bg-navy-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-navy-700">
                       {item.source}
                     </span>
-                    <span className="text-navy-950 dark:text-navy-100">{item.observation}</span>
+                    <span className="text-navy-950 dark:text-sand-800">{item.observation}</span>
                   </li>
                 ))}
               </ul>
@@ -202,7 +202,7 @@ export function CommandBar({ tripId, aiEnabled }: { tripId: string; aiEnabled: b
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sand-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sand-600">
             <span>
               {result.toolCallsUsed} tool call{result.toolCallsUsed === 1 ? "" : "s"} ·{" "}
               {(result.durationMs / 1000).toFixed(1)}s

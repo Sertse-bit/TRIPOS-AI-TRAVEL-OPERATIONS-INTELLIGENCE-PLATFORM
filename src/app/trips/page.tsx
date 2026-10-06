@@ -13,7 +13,7 @@ export default async function TripsPage() {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             My trips
           </h1>
           <p className="mt-1 text-sm text-sand-600">
@@ -28,7 +28,7 @@ export default async function TripsPage() {
           {trips.length === 0 ? (
             <Card className="border-dashed text-center dark:bg-transparent">
               <p className="text-sm font-medium text-sand-700 dark:text-sand-600">No trips yet.</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-sand-500">
+              <p className="mx-auto mt-1 max-w-sm text-sm text-sand-600">
                 Create your first trip to start tracking destinations, flights, and live operational
                 state.
               </p>
@@ -39,10 +39,10 @@ export default async function TripsPage() {
                 <Card className="transition hover:border-navy-500/40 hover:shadow-md">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-navy-950 dark:text-navy-100">
+                      <p className="truncate font-semibold text-navy-950 dark:text-sand-800">
                         {trip.title}
                       </p>
-                      <p className="mt-0.5 text-xs text-sand-500">
+                      <p className="mt-0.5 text-xs text-sand-600">
                         {trip.startDate
                           ? `Starts ${new Date(trip.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
                           : "No dates set"}

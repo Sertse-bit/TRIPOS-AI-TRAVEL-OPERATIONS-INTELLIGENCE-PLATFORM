@@ -11,7 +11,7 @@ import { Button, FormMessage, useAsyncAction } from "@/components/ui";
 /* ------------------------------------------------------------------ */
 
 const inputClass =
-  "h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50";
+  "h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50";
 
 const fieldLabelClass = "flex flex-col gap-1 text-sm font-medium text-sand-700 dark:text-sand-600";
 
@@ -180,13 +180,13 @@ export function AddItineraryItemForm({
       </label>
 
       <div className="sm:col-span-2">
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" busy={busy}>
           {busy ? "Adding…" : "Add item"}
         </Button>
         <div className="mt-2">
           <FormMessage message={message} />
         </div>
-        <p className="mt-1 text-xs text-sand-500">
+        <p className="mt-1 text-xs text-sand-600">
           Costs are yours to record — the AI planner never estimates a price. Leave both cost fields
           empty if you don&apos;t know one; the budget totals will show how many items have no
           recorded cost.
@@ -208,7 +208,7 @@ export function DeleteItineraryItemButton({ tripId, itemId }: { tripId: string; 
   }
 
   return (
-    <Button variant="ghost" onClick={handleDelete} disabled={busy} className="h-7 px-2 text-xs">
+    <Button variant="ghost" onClick={handleDelete} busy={busy} className="h-7 px-2 text-xs">
       {busy ? "Removing…" : "Remove"}
     </Button>
   );
@@ -275,11 +275,11 @@ export function BudgetForm({
           className={inputClass}
         />
       </label>
-      <Button type="submit" disabled={busy} variant="secondary">
+      <Button type="submit" busy={busy} variant="secondary">
         {busy ? "Saving…" : currentAmount !== null ? "Update budget" : "Set budget"}
       </Button>
       {currentAmount !== null && (
-        <Button variant="ghost" onClick={handleClear} disabled={busy}>
+        <Button variant="ghost" onClick={handleClear} busy={busy}>
           Clear
         </Button>
       )}
@@ -330,7 +330,7 @@ export function GeneratePlanButton({ tripId }: { tripId: string }) {
 
   return (
     <div className="mt-3">
-      <Button onClick={handleGenerate} disabled={busy}>
+      <Button onClick={handleGenerate} busy={busy}>
         {busy ? "Planning… (up to 30s)" : "Generate a plan with AI"}
       </Button>
       <div className="mt-2">
@@ -339,7 +339,7 @@ export function GeneratePlanButton({ tripId }: { tripId: string }) {
 
       {plan && (
         <div className="mt-3 space-y-2 rounded-lg border border-sand-200 p-3 dark:border-sand-200">
-          <p className="text-sm text-navy-950 dark:text-navy-100">{plan.rationale}</p>
+          <p className="text-sm text-navy-950 dark:text-sand-800">{plan.rationale}</p>
           {plan.budget.converted?.overBudget && (
             <p className="text-sm text-alert-600">
               This plan sits over the budget cap once your recorded costs are counted.
@@ -347,7 +347,7 @@ export function GeneratePlanButton({ tripId }: { tripId: string }) {
           )}
           {plan.assumptions.length > 0 && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-sand-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sand-600">
                 Assumptions the planner made
               </p>
               <ul className="mt-1 list-inside list-disc text-xs text-sand-600">

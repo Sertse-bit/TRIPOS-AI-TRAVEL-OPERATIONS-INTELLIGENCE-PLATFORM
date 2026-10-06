@@ -154,10 +154,10 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/trips" className="text-sm text-sand-500 underline-offset-2 hover:underline">
+          <Link href="/trips" className="text-sm text-sand-600 underline-offset-2 hover:underline">
             ← All trips
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             {trip.title}
           </h1>
           <p className="mt-1 text-sm text-sand-600">
@@ -214,10 +214,10 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                     className="flex items-start justify-between gap-3 rounded-lg border border-sand-200 p-3 dark:border-sand-200"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-navy-950 dark:text-navy-100">
+                      <p className="font-medium text-navy-950 dark:text-sand-800">
                         {d.city}, {d.country}
                       </p>
-                      <p className="mt-0.5 text-xs text-sand-500">
+                      <p className="mt-0.5 text-xs text-sand-600">
                         {d.arrivalDate ? `Arrive ${fmtDate(d.arrivalDate)}` : ""}
                         {d.arrivalDate && d.departureDate ? " · " : ""}
                         {d.departureDate ? `Leave ${fmtDate(d.departureDate)}` : ""}
@@ -245,8 +245,8 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                     key={t.id}
                     className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
                   >
-                    <p className="font-medium text-navy-950 dark:text-navy-100">{t.fullName}</p>
-                    <p className="mt-0.5 text-xs text-sand-500">
+                    <p className="font-medium text-navy-950 dark:text-sand-800">{t.fullName}</p>
+                    <p className="mt-0.5 text-xs text-sand-600">
                       {t.dateOfBirth ? `DOB ${fmtDate(t.dateOfBirth)}` : "No DOB"}
                       {t.passportNumber ? ` · Passport on file` : ""}
                     </p>
@@ -277,10 +277,10 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-medium text-navy-950 dark:text-navy-100">
+                        <p className="font-medium text-navy-950 dark:text-sand-800">
                           {f.airline} · {f.flightNumber}
                         </p>
-                        <p className="mt-0.5 text-xs text-sand-500">
+                        <p className="mt-0.5 text-xs text-sand-600">
                           {f.departureAirport} → {f.arrivalAirport} ·{" "}
                           {fmtDateTime(f.scheduledDeparture)}
                         </p>
@@ -337,10 +337,10 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-navy-950 dark:text-navy-100">
+                      <p className="truncate text-sm font-medium text-navy-950 dark:text-sand-800">
                         {doc.originalFilename}
                       </p>
-                      <p className="text-xs text-sand-500">
+                      <p className="text-xs text-sand-600">
                         {doc.mimeType} · {(doc.sizeBytes / 1024).toFixed(0)} KB
                         {facts?.pageCount ? ` · ${facts.pageCount} page(s)` : ""}
                       </p>
@@ -400,18 +400,18 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
         {latestRisk ? (
           <div className="mt-3 space-y-2">
-            <p className="text-sm text-navy-950 dark:text-navy-100">
+            <p className="text-sm text-navy-950 dark:text-sand-800">
               Score <strong>{latestRisk.riskScore}/100</strong> ·{" "}
               {Number(latestRisk.confidence) === 1
                 ? "all factors had data"
                 : `confidence ${(Number(latestRisk.confidence) * 100).toFixed(0)}% — some factors had no data`}
             </p>
-            <ul className="space-y-1 text-xs text-sand-500">
+            <ul className="space-y-1 text-xs text-sand-600">
               {readRiskFactorLines(latestRisk.factors).map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
-            <p className="text-xs text-sand-400">Generated {fmtDateTime(latestRisk.generatedAt)}</p>
+            <p className="text-xs text-sand-600">Generated {fmtDateTime(latestRisk.generatedAt)}</p>
           </div>
         ) : (
           <EmptyState>
@@ -449,7 +449,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <div className="mt-4">
             <RunMonitorButton tripId={trip.id} />
           </div>
-          <p className="mt-3 text-xs text-sand-400">
+          <p className="mt-3 text-xs text-sand-600">
             The button above always runs one pass now. Automatic checks are listed on the{" "}
             <Link href="/trips/watches" className="underline underline-offset-2">
               Trip Watch page
@@ -465,7 +465,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
         {recommendations.length > 0 && (
           <div className="mt-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-sand-500">
+            <p className="text-xs font-medium uppercase tracking-wide text-sand-600">
               Saved recommendations
             </p>
             <ul className="mt-2 space-y-2">
@@ -475,7 +475,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                   className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+                    <p className="text-sm font-medium text-navy-950 dark:text-sand-800">
                       {rec.decision}
                     </p>
                     <StatusBadge status={rec.status} tone={recommendationStatusTone(rec.status)} />
@@ -483,7 +483,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
                   <p className="mt-1 text-sm text-sand-800 dark:text-sand-700">
                     {rec.recommendationText}
                   </p>
-                  <p className="mt-1 text-xs text-sand-500">
+                  <p className="mt-1 text-xs text-sand-600">
                     {readRiskScore(rec.evidence) !== null && (
                       <>Risk {readRiskScore(rec.evidence)}/100 · </>
                     )}
@@ -510,7 +510,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           </div>
           <Link
             href="/trips/audit"
-            className="flex-none text-xs text-sand-500 underline underline-offset-2 hover:text-sand-700"
+            className="flex-none text-xs text-sand-600 underline underline-offset-2 hover:text-sand-700"
           >
             All activity →
           </Link>
@@ -529,7 +529,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           </ul>
         )}
         {audit.total > audit.entries.length && (
-          <p className="mt-3 text-xs text-sand-400">
+          <p className="mt-3 text-xs text-sand-600">
             Showing the {audit.entries.length} most recent of {audit.total} entries.
           </p>
         )}
@@ -548,15 +548,15 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
               <li key={event.id} className="py-2.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-mono text-sm text-navy-950 dark:text-navy-100">
+                    <p className="font-mono text-sm text-navy-950 dark:text-sand-800">
                       {event.eventType}
                     </p>
-                    <p className="truncate text-xs text-sand-500">
+                    <p className="truncate text-xs text-sand-600">
                       {event.entityType}
                       {event.metadata ? ` · ${JSON.stringify(event.metadata)}` : ""}
                     </p>
                   </div>
-                  <time className="flex-none text-xs text-sand-400">
+                  <time className="flex-none text-xs text-sand-600">
                     {fmtDateTime(event.createdAt)}
                   </time>
                 </div>

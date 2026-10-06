@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { Tone } from "@/components/tone";
 
 /* ------------------------------------------------------------------ */
@@ -50,6 +50,7 @@ export function Button({
   onClick,
   type = "button",
   disabled = false,
+  busy = false,
   variant = "primary",
   className = "",
 }: {
@@ -57,6 +58,13 @@ export function Button({
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  /**
+   * Phase 25: a request is in flight. Kept separate from `disabled` so the
+   * state is announced (`aria-busy`) rather than only blocking the click —
+   * an assistive-technology user otherwise gets a button that silently
+   * stops responding, with no explanation.
+   */
+  busy?: boolean;
   variant?: "primary" | "secondary" | "ghost";
   className?: string;
 }) {
@@ -65,14 +73,15 @@ export function Button({
     secondary:
       "border border-sand-300 bg-sand-50 text-sand-800 hover:bg-sand-100 dark:bg-sand-100 dark:text-sand-800 dark:border-sand-200 dark:hover:bg-sand-200",
     ghost:
-      "text-sand-600 hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100",
+      "text-sand-600 hover:bg-sand-100 hover:text-sand-800 dark:text-sand-600 dark:hover:bg-sand-100",
   }[variant];
 
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${styles} ${className}`}
     >
       {children}
@@ -94,6 +103,7 @@ export function TextField({
   defaultValue,
   className = "",
   onChange,
+  error = null,
 }: {
   label: string;
   name: string;
@@ -106,11 +116,22 @@ export function TextField({
   className?: string;
   minLength?: number;
   onChange?: (value: string) => void;
+  /** A field-level message; announced and programmatically linked. */
+  error?: string | null;
 }) {
+  // Explicit label association (Phase 25). The wrapping-label form was
+  // valid, but an id pairing lets the field also point AT its error text
+  // via aria-describedby, which a wrapper label cannot express.
+  const inputId = useId();
+  const errorId = `${inputId}-error`;
+
   return (
-    <label className={`flex flex-col gap-1 text-sm ${className}`}>
-      <span className="font-medium text-sand-700 dark:text-sand-600">{label}</span>
+    <div className={`flex flex-col gap-1 text-sm ${className}`}>
+      <label htmlFor={inputId} className="font-medium text-sand-700 dark:text-sand-600">
+        {label}
+      </label>
       <input
+        id={inputId}
         name={name}
         type={type}
         required={required}
@@ -119,10 +140,17 @@ export function TextField({
         placeholder={placeholder}
         autoComplete={autoComplete}
         defaultValue={defaultValue}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm text-foreground outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
+        className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm text-foreground outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
       />
-    </label>
+      {error ? (
+        <p id={errorId} role="alert" className="text-sm text-alert-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -134,7 +162,10 @@ export function FormMessage({
   if (!message) return null;
   return (
     <p
-      role="status"
+      // Errors interrupt; successes wait their turn (Phase 25). Both are
+      // live regions, so a submit result is announced instead of only
+      // appearing on screen.
+      role={message.type === "error" ? "alert" : "status"}
       className={`text-sm ${message.type === "error" ? "text-alert-600" : "text-ok-600"}`}
     >
       {message.text}
@@ -186,14 +217,18 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 // --- Empty state ---
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-sand-500">{children}</p>;
+  return <p className="text-sm text-sand-600">{children}</p>;
 }
 
 // --- Error boundary helper (small, client-side) ---
 
 export function InlineError({ error }: { error: Error | null }) {
   if (!error) return null;
-  return <p className="text-sm text-alert-600">{error.message}</p>;
+  return (
+    <p role="alert" className="text-sm text-alert-600">
+      {error.message}
+    </p>
+  );
 }
 
 // --- useAsyncAction: small wrapper for POST/PATCH flows ---

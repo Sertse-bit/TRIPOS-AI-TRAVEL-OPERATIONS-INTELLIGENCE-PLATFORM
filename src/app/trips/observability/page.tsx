@@ -26,7 +26,7 @@ function fmtDateTime(value: string): string {
 function SummaryStat({
   label,
   value,
-  tone = "text-navy-950 dark:text-navy-100",
+  tone = "text-navy-950 dark:text-sand-800",
 }: {
   label: string;
   value: string | number;
@@ -34,7 +34,7 @@ function SummaryStat({
 }) {
   return (
     <div className="rounded-lg border border-sand-200 p-3 dark:border-sand-200">
-      <p className="text-xs font-semibold uppercase tracking-wide text-sand-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-sand-600">{label}</p>
       <p className={`mt-1 text-xl font-semibold tracking-tight ${tone}`}>{value}</p>
     </div>
   );
@@ -48,7 +48,7 @@ export default async function ObservabilityPage() {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             System observability
           </h1>
           <p className="mt-1 text-sm text-sand-600">
@@ -86,7 +86,7 @@ export default async function ObservabilityPage() {
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sand-200 p-3 dark:border-sand-200"
             >
               <div className="min-w-0">
-                <p className="font-medium capitalize text-navy-950 dark:text-navy-100">
+                <p className="font-medium capitalize text-navy-950 dark:text-sand-800">
                   {check.name}
                 </p>
                 {check.error && (
@@ -120,15 +120,15 @@ export default async function ObservabilityPage() {
             <li key={provider.provider} className="py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm font-medium text-navy-950 dark:text-navy-100">
+                  <span className="font-mono text-sm font-medium text-navy-950 dark:text-sand-800">
                     {provider.provider}
                   </span>
                   {provider.configured ? (
-                    <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-600">
+                    <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-600 dark:text-navy-500">
                       configured
                     </span>
                   ) : (
-                    <span className="rounded-full bg-sand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand-500">
+                    <span className="rounded-full bg-sand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand-600">
                       not configured
                     </span>
                   )}
@@ -140,7 +140,7 @@ export default async function ObservabilityPage() {
                       tone={apiHealthTone(provider.health.status)}
                     />
                   ) : (
-                    <span className="text-xs text-sand-400">never exercised</span>
+                    <span className="text-xs text-sand-600">never exercised</span>
                   )}
                   {provider.circuit ? (
                     <StatusBadge
@@ -148,11 +148,11 @@ export default async function ObservabilityPage() {
                       tone={circuitStateTone(provider.circuit.state)}
                     />
                   ) : (
-                    <span className="text-xs text-sand-400">no circuit activity</span>
+                    <span className="text-xs text-sand-600">no circuit activity</span>
                   )}
                 </div>
               </div>
-              <p className="mt-1 text-xs text-sand-500">
+              <p className="mt-1 text-xs text-sand-600">
                 {provider.health ? (
                   <>
                     {provider.health.consecutiveFailures} consecutive failure

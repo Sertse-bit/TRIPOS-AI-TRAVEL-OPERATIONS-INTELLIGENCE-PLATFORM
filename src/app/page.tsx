@@ -31,10 +31,10 @@ export default function Home() {
         <Link href="/">
           <LogoMark />
         </Link>
-        <nav className="flex items-center gap-3">
+        <nav aria-label="Primary" className="flex items-center gap-3">
           <Link
             href="/trips"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-500 dark:hover:bg-sand-100"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-sand-600 transition hover:bg-sand-100 hover:text-sand-800 dark:text-sand-600 dark:hover:bg-sand-100"
           >
             Command Center
           </Link>
@@ -47,14 +47,14 @@ export default function Home() {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 pb-16">
+      <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-6 pb-16">
         {/* Hero */}
         <section className="grid items-center gap-10 md:grid-cols-2">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-navy-100 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-navy-700 dark:text-navy-500">
               AI Travel Operations
             </span>
-            <h1 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-tight text-navy-950 dark:text-navy-100 md:text-5xl">
+            <h1 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-tight text-navy-950 dark:text-sand-800 md:text-5xl">
               The command center for
               <span className="text-navy-700 dark:text-navy-500"> every trip.</span>
             </h1>
@@ -70,6 +70,7 @@ export default function Home() {
               >
                 Open command center
                 <svg
+                  aria-hidden="true"
                   className="h-4 w-4"
                   viewBox="0 0 24 24"
                   fill="none"
@@ -89,7 +90,7 @@ export default function Home() {
                 Create account
               </Link>
             </div>
-            <p className="mt-5 text-xs text-sand-500">
+            <p className="mt-5 text-xs text-sand-600">
               Free to try. Sessions are DB-backed, hashed, and revocable.
             </p>
           </div>
@@ -101,7 +102,7 @@ export default function Home() {
                 <span className="h-2.5 w-2.5 rounded-full bg-ok-500" />
                 <span className="h-2.5 w-2.5 rounded-full bg-warn-500" />
                 <span className="h-2.5 w-2.5 rounded-full bg-alert-500" />
-                <span className="ml-3 font-mono text-xs text-sand-500">trip-7 · digital twin</span>
+                <span className="ml-3 font-mono text-xs text-sand-600">trip-7 · digital twin</span>
               </div>
               <div className="space-y-2 p-4">
                 {[
@@ -116,10 +117,10 @@ export default function Home() {
                     className="flex items-center justify-between rounded-md px-3 py-2 transition hover:bg-sand-100 dark:hover:bg-sand-100"
                   >
                     <div>
-                      <p className="text-xs font-medium text-sand-500">{item.label}</p>
+                      <p className="text-xs font-medium text-sand-600">{item.label}</p>
                       <p
                         className={`text-sm font-semibold ${
-                          item.tone === "ok" ? "text-ok-600" : "text-navy-950 dark:text-navy-100"
+                          item.tone === "ok" ? "text-ok-600" : "text-navy-950 dark:text-sand-800"
                         }`}
                       >
                         {item.value}
@@ -140,7 +141,7 @@ export default function Home() {
 
         {/* Features */}
         <section className="mt-16">
-          <h2 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h2 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             Built for the whole trip, not just the itinerary
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-sand-600">
@@ -158,6 +159,7 @@ export default function Home() {
                 <div className="flex items-start gap-3">
                   <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-navy-100 text-navy-700 dark:text-navy-500">
                     <svg
+                      aria-hidden="true"
                       className="h-4 w-4"
                       viewBox="0 0 24 24"
                       fill="none"
@@ -170,7 +172,7 @@ export default function Home() {
                     </svg>
                   </span>
                   <div>
-                    <h3 className="font-semibold text-navy-950 dark:text-navy-100">
+                    <h3 className="font-semibold text-navy-950 dark:text-sand-800">
                       {feature.name}
                     </h3>
                     <p className="mt-1 text-sm text-sand-600">{feature.description}</p>
@@ -185,7 +187,7 @@ export default function Home() {
         <section className="mt-16 rounded-xl border border-sand-200 bg-sand-100/60 p-6 dark:border-sand-200 dark:bg-sand-100/60 md:p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+              <h2 className="text-lg font-semibold tracking-tight text-navy-950 dark:text-sand-800">
                 Ready to run your trips like operations?
               </h2>
               <p className="mt-1 text-sm text-sand-600">
@@ -210,7 +212,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-sand-200 px-6 py-6 text-center text-xs text-sand-400 dark:border-sand-200">
+      <footer className="border-t border-sand-200 px-6 py-6 text-center text-xs text-sand-600 dark:border-sand-200">
         TripOS — AI Travel Operations &amp; Intelligence Platform.
         <br />
         Next.js 16 · Postgres repositories · typed AI tool layer.

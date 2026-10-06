@@ -927,9 +927,44 @@ reads (ownership never derived from the audit rows)
   refused LLM call), so the log cannot claim work that did not happen.
 - **One id, three places.** `requestId` is the same value the API
   envelope (`withApiHandler`) and the structured log line carry. A cron
-  worker with no HTTP request writes `null` — the schema's own convention.
-- **Failure policy is stated, not hidden.** The USER/AGENT writers are
+  worker with no HTTP request writes `null` — the schema's own convention.- **Failure policy is stated, not hidden.** The USER/AGENT writers are
   fire-and-forget by design (a lost audit row is a smaller failure than a
   mutation that appears to have failed after committing) and log at warn;
   the SYSTEM writer is awaited because a sweep is already background work
   whose own report must not outpace its audit row.
+
+## 26. Accessibility (Phase 25)
+
+The theme is a token system whose scale **inverts** in dark mode
+(`--sand-50` is the lightest surface in light mode and the darkest in
+dark). That made two classes of failure possible at once, and both were
+real:
+
+```text
+text-navy-950 dark:text-navy-100    light: #0c1a2e on #f7f4ef  15.9:1  ok
+                                    dark:  #1b2738 on #1a1714   1.06:1  INVISIBLE
+text-sand-500                      light: #a08a70 on #fcfaf6   3.17:1  fails AA
+text-sand-400                      light: #c0ac93 on #ffffff   2.20:1  fails AA
+```
+
+- **Tokens carry a contrast contract, and a test enforces it.**
+  `src/app/accessibility.test.ts` parses both token maps out of
+  `globals.css`, computes WCAG relative luminance/contrast in-process, and
+  checks every `text-*` palette class found in the source against the
+  surfaces that theme renders text on. It also fails on any palette class
+  whose token `globals.css` never declares — Tailwind silently generates
+  nothing for those, so `bg-navy-50` was a styled-looking dead class.
+- **Chip colours are checked pairwise** (the eight `StatusBadge`
+  foreground/background pairs) rather than against the neutral surfaces,
+  because a tinted chip is a surface only its own badge text sits on.
+- **Semantics are structural, not per-page.** The root layout owns the
+  skip link and it is the first focusable element; each shell's `<main>`
+  owns `id="main-content"`; the nav owns one `aria-current="page"`
+  computed by longest-prefix match in a pure module (`nav-links.ts`) so the
+  rule is unit-tested rather than eyeballed. Shells are deliberately not
+  client components — only the nav is an island.
+- **What a static check cannot see is stated, not implied:** no browser
+  audit ran (no Chrome in this sandbox), so focus order, tab traps, and
+  screen-reader output are unverified; gradients and `text-white` on
+  coloured buttons are outside the scan; dynamic class names are
+  unreachable by a literal scan.

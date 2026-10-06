@@ -55,10 +55,10 @@ export function NewTripForm() {
           required
           maxLength={200}
           placeholder="e.g. Lisbon October Escape"
-          className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
+          className="h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
         />
       </label>
-      <Button type="submit" disabled={busy || !title.trim()} className="w-full">
+      <Button type="submit" busy={busy} disabled={!title.trim()} className="w-full">
         {busy ? "Creating…" : "Create trip"}
       </Button>
       <FormMessage message={message} />

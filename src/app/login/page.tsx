@@ -76,7 +76,7 @@ function LoginForm() {
           autoComplete="current-password"
           required
         />
-        <Button type="submit" disabled={busy} className="h-10 w-full">
+        <Button type="submit" busy={busy} className="h-10 w-full">
           {busy ? "Signing in…" : "Sign in"}
         </Button>
         <FormMessage message={message} />

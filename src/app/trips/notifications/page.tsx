@@ -25,11 +25,11 @@ export default async function NotificationsPage() {
 
   return (
     <div>
-      <Link href="/trips" className="text-sm text-sand-500 underline-offset-2 hover:underline">
+      <Link href="/trips" className="text-sm text-sand-600 underline-offset-2 hover:underline">
         ← All trips
       </Link>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+        <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
           Notifications
         </h1>
         <p className="text-sm text-sand-600">
@@ -62,7 +62,7 @@ export default async function NotificationsPage() {
             {notifications.map((notification) => (
               <li key={notification.id} className="py-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="min-w-0 truncate text-sm text-navy-950 dark:text-navy-100">
+                  <p className="min-w-0 truncate text-sm text-navy-950 dark:text-sand-800">
                     {notification.title}
                     {notification.readAt ? null : (
                       <span className="ml-2 text-xs font-semibold text-warn-700 dark:text-warn-500">
@@ -70,11 +70,11 @@ export default async function NotificationsPage() {
                       </span>
                     )}
                   </p>
-                  <time className="flex-none text-xs text-sand-400">
+                  <time className="flex-none text-xs text-sand-600">
                     {fmtDateTime(notification.createdAt)}
                   </time>
                 </div>
-                <p className="mt-0.5 text-xs text-sand-500">{notification.body}</p>
+                <p className="mt-0.5 text-xs text-sand-600">{notification.body}</p>
               </li>
             ))}
           </ul>

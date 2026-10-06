@@ -11,7 +11,7 @@ import { Button, FormMessage, useAsyncAction } from "@/components/ui";
 /* ------------------------------------------------------------------ */
 
 const inputClass =
-  "h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50";
+  "h-10 w-full rounded-md border border-sand-300 bg-white px-3 text-sm outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50";
 
 const labelClass = "flex flex-col gap-1 text-sm";
 
@@ -97,7 +97,7 @@ export function AddDestinationForm({ tripId }: { tripId: string }) {
           <input name="departure" type="date" className={inputClass} />
         </label>
       </div>
-      <Button type="submit" disabled={busy}>
+      <Button type="submit" busy={busy}>
         {busy ? "Adding…" : "Add destination"}
       </Button>
       <FormMessage message={message} />
@@ -147,7 +147,7 @@ export function AddTravelerForm({ tripId }: { tripId: string }) {
         <span className={fieldLabelClass}>Passport number (optional)</span>
         <input name="passport" type="text" maxLength={50} className={inputClass} />
       </label>
-      <Button type="submit" disabled={busy}>
+      <Button type="submit" busy={busy}>
         {busy ? "Adding…" : "Add traveler"}
       </Button>
       <FormMessage message={message} />
@@ -255,7 +255,7 @@ export function AddFlightForm({ tripId }: { tripId: string }) {
           <input name="scheduledArrival" type="datetime-local" className={inputClass} />
         </label>
       </div>
-      <Button type="submit" disabled={busy}>
+      <Button type="submit" busy={busy}>
         {busy ? "Adding…" : "Add flight"}
       </Button>
       <FormMessage message={message} />
@@ -334,12 +334,7 @@ export function CheckFlightStatusButton({
 
   return (
     <span className="inline-flex items-center gap-2">
-      <Button
-        onClick={handleClick}
-        disabled={busy}
-        variant="secondary"
-        className="h-8 px-3 text-xs"
-      >
+      <Button onClick={handleClick} busy={busy} variant="secondary" className="h-8 px-3 text-xs">
         {busy ? "Checking…" : "Check status"}
       </Button>
       <FormMessage message={message} />
@@ -373,12 +368,7 @@ export function CheckWeatherButton({
 
   return (
     <span className="inline-flex items-center gap-2">
-      <Button
-        onClick={handleClick}
-        disabled={busy}
-        variant="secondary"
-        className="h-8 px-3 text-xs"
-      >
+      <Button onClick={handleClick} busy={busy} variant="secondary" className="h-8 px-3 text-xs">
         {busy ? "Checking…" : "Check weather"}
       </Button>
       <FormMessage message={message} />
@@ -447,7 +437,7 @@ export function CurrencyCheckForm({ tripId }: { tripId: string }) {
           <input name="amount" type="number" min={0} step="any" className={inputClass} />
         </label>
         <div className="flex items-end">
-          <Button type="submit" disabled={busy} className="w-full">
+          <Button type="submit" busy={busy} className="w-full">
             {busy ? "Checking…" : "Check rate"}
           </Button>
         </div>
@@ -514,10 +504,10 @@ export function ResearchForm({ tripId }: { tripId: string }) {
             rows={2}
             maxLength={500}
             placeholder="e.g. What's the best area to stay in Lisbon in October?"
-            className="w-full resize-y rounded-md border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-sand-400 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
+            className="w-full resize-y rounded-md border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-sand-600 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
           />
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" busy={busy}>
           {busy ? "Researching…" : "Ask"}
         </Button>
       </form>
@@ -525,7 +515,7 @@ export function ResearchForm({ tripId }: { tripId: string }) {
         <div className="mt-3 rounded-md border border-sand-200 bg-sand-100/60 p-3 dark:border-sand-200 dark:bg-sand-100/60">
           <p className="text-sm text-sand-800 dark:text-sand-700">{answer}</p>
           {sources.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-sand-500">
+            <ul className="mt-2 space-y-1 text-xs text-sand-600">
               {sources.map((s) => (
                 <li key={s.url}>
                   <a
@@ -623,10 +613,10 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
             className="w-full rounded-md border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition file:mr-3 file:rounded file:border-0 file:bg-navy-900 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:border-navy-500 focus:border-navy-500 focus:ring-2 focus:ring-navy-200/60 dark:border-sand-200 dark:bg-sand-50"
           />
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" busy={busy}>
           {busy ? "Uploading and extracting…" : "Upload document"}
         </Button>
-        <p className="text-xs text-sand-500">
+        <p className="text-xs text-sand-600">
           PDFs are text-extracted on upload. Images are stored but not text-extracted — OCR is not
           implemented, and a document is only marked READY when extraction actually succeeded.
         </p>
@@ -640,7 +630,7 @@ export function DocumentUploadForm({ tripId }: { tripId: string }) {
               : "border-alert-100 bg-alert-100/40 dark:border-alert-500/30"
           }`}
         >
-          <p className="font-medium text-navy-950 dark:text-navy-100">
+          <p className="font-medium text-navy-950 dark:text-sand-800">
             {uploaded.originalFilename} — {uploaded.status}
           </p>
           {uploaded.status === "READY" && meta?.extraction && (
@@ -710,13 +700,13 @@ export function RunMonitorButton({ tripId }: { tripId: string }) {
 
   return (
     <div>
-      <Button onClick={handleClick} disabled={busy} variant="secondary">
+      <Button onClick={handleClick} busy={busy} variant="secondary">
         {busy ? "Checking…" : "Run monitor check"}
       </Button>
       <FormMessage message={message} />
       {result && (
         <div className="mt-3 rounded-md border border-sand-200 p-3 text-sm dark:border-sand-200">
-          <p className="text-navy-950 dark:text-navy-100">
+          <p className="text-navy-950 dark:text-sand-800">
             {result.alert
               ? `Alert raised: ${result.alert.title}`
               : result.alertSuppressionReason === "below-threshold"
@@ -731,7 +721,7 @@ export function RunMonitorButton({ tripId }: { tripId: string }) {
               {result.riskChange.riskScore}/100 ({result.riskChange.severity}).
             </p>
           )}
-          <p className="mt-1 text-xs text-sand-500">
+          <p className="mt-1 text-xs text-sand-600">
             Checked {result.checkedFlights.length} flight(s)
             {result.flightsChanged > 0 ? `, ${result.flightsChanged} changed` : ""}.
             {skipped > 0 && ` ${skipped} check(s) failed — reported as failed, not as unchanged.`}
@@ -844,15 +834,15 @@ export function TripWatchCard({
 
         {watch?.enabled ? (
           <>
-            <Button onClick={() => save({})} disabled={busy} variant="secondary">
+            <Button onClick={() => save({})} busy={busy} variant="secondary">
               {busy ? "Saving…" : "Save"}
             </Button>
-            <Button onClick={() => save({ enabled: false })} disabled={busy} variant="secondary">
+            <Button onClick={() => save({ enabled: false })} busy={busy} variant="secondary">
               Pause watch
             </Button>
           </>
         ) : (
-          <Button onClick={() => save({ enabled: true })} disabled={busy}>
+          <Button onClick={() => save({ enabled: true })} busy={busy}>
             {busy ? "Starting…" : watch ? "Resume watch" : "Watch this trip"}
           </Button>
         )}
@@ -861,7 +851,7 @@ export function TripWatchCard({
       <FormMessage message={message} />
 
       {watch?.enabled ? (
-        <p className="text-xs text-sand-500">
+        <p className="text-xs text-sand-600">
           Watching{" "}
           {INTERVALS.find((o) => o.minutes === watch.intervalMinutes)?.label ??
             `every ${watch.intervalMinutes} minutes`}
@@ -872,7 +862,7 @@ export function TripWatchCard({
           {watch.lastRunAt ? ` · last checked ${new Date(watch.lastRunAt).toLocaleString()}` : ""}
         </p>
       ) : (
-        <p className="text-xs text-sand-500">
+        <p className="text-xs text-sand-600">
           Not watched. Automatic checks only run for trips you watch; the button above always runs
           one on demand.
         </p>
@@ -944,21 +934,21 @@ export function RunDueWatchesButton() {
 
   return (
     <div>
-      <Button onClick={handleClick} disabled={busy}>
+      <Button onClick={handleClick} busy={busy}>
         {busy ? "Checking…" : "Run due checks now"}
       </Button>
       <FormMessage message={message} />
       {result && (
         <div className="mt-3 rounded-md border border-sand-200 p-3 text-sm dark:border-sand-200">
           {result.passes.length === 0 ? (
-            <p className="text-navy-950 dark:text-navy-100">
+            <p className="text-navy-950 dark:text-sand-800">
               Nothing was due. Watches run on their own cadence.
             </p>
           ) : (
             <ul className="space-y-1.5">
               {result.passes.map((pass) => (
                 <li key={pass.tripId} className="text-sm">
-                  <span className="font-medium text-navy-950 dark:text-navy-100">
+                  <span className="font-medium text-navy-950 dark:text-sand-800">
                     {pass.tripTitle}
                   </span>{" "}
                   <span className="text-sand-600">— {describePass(pass)}</span>
@@ -966,7 +956,7 @@ export function RunDueWatchesButton() {
               ))}
             </ul>
           )}
-          <p className="mt-2 text-xs text-sand-500">
+          <p className="mt-2 text-xs text-sand-600">
             {result.alertsRaised} alert(s) raised · {result.failed} failed · {result.finished}{" "}
             finished
             {result.stillDue > 0 && ` · ${result.stillDue} still due`}
@@ -1029,7 +1019,7 @@ export function NotificationsList() {
 
   return (
     <div>
-      <Button onClick={load} disabled={busy} variant="secondary">
+      <Button onClick={load} busy={busy} variant="secondary">
         {busy ? "Loading…" : "Load notifications"}
       </Button>
       <FormMessage message={message} />
@@ -1048,11 +1038,11 @@ export function NotificationsList() {
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium text-navy-950 dark:text-navy-100">{item.title}</p>
+                <p className="text-sm font-medium text-navy-950 dark:text-sand-800">{item.title}</p>
                 {!item.readAt && (
                   <Button
                     onClick={() => markRead(item.id)}
-                    disabled={busy}
+                    busy={busy}
                     variant="secondary"
                     className="h-7 px-2 text-xs"
                   >
@@ -1139,14 +1129,14 @@ export function ExplainRiskCard({ tripId }: { tripId: string }) {
   return (
     <div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button onClick={handleExplain} disabled={busy} variant="secondary">
+        <Button onClick={handleExplain} busy={busy} variant="secondary">
           {busy ? "Explaining…" : "Explain this risk"}
         </Button>
-        <Button onClick={handleSave} disabled={busy}>
+        <Button onClick={handleSave} busy={busy}>
           {busy ? "Saving…" : "Save as recommendation"}
         </Button>
       </div>
-      <p className="mt-2 text-xs text-sand-500">
+      <p className="mt-2 text-xs text-sand-600">
         The score and its factors are calculated deterministically. The agent only writes the
         explanation, and every point it makes is checked against that stored score before it is
         shown.
@@ -1155,10 +1145,10 @@ export function ExplainRiskCard({ tripId }: { tripId: string }) {
 
       {explanation && (
         <div className="mt-3 rounded-md border border-sand-200 p-3 dark:border-sand-200">
-          <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+          <p className="text-sm font-medium text-navy-950 dark:text-sand-800">
             {explanation.decision}
           </p>
-          <p className="mt-1 text-xs text-sand-500">
+          <p className="mt-1 text-xs text-sand-600">
             Explaining risk {explanation.riskScore}/100 ({explanation.severity})
           </p>
 
@@ -1175,11 +1165,11 @@ export function ExplainRiskCard({ tripId }: { tripId: string }) {
           <p className="mt-2 text-sm text-sand-800 dark:text-sand-700">
             {explanation.reasoningSummary}
           </p>
-          <p className="mt-1 text-sm font-medium text-navy-950 dark:text-navy-100">
+          <p className="mt-1 text-sm font-medium text-navy-950 dark:text-sand-800">
             {explanation.recommendationText}
           </p>
 
-          <p className="mt-2 text-xs text-sand-500">
+          <p className="mt-2 text-xs text-sand-600">
             Confidence {(explanation.confidence * 100).toFixed(0)}%
             {explanation.confidence < explanation.assessmentConfidence
               ? ` — capped at this assessment's own data coverage of ${(explanation.assessmentConfidence * 100).toFixed(0)}%`
@@ -1244,17 +1234,17 @@ export function AssessRiskButton({ tripId }: { tripId: string }) {
 
   return (
     <div>
-      <Button onClick={handleClick} disabled={busy} variant="secondary">
+      <Button onClick={handleClick} busy={busy} variant="secondary">
         {busy ? "Assessing…" : "Assess risk now"}
       </Button>
       <FormMessage message={message} />
       {result && (
         <div className="mt-3 rounded-md border border-sand-200 p-3 dark:border-sand-200">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm font-medium text-navy-950 dark:text-navy-100">
+            <p className="text-sm font-medium text-navy-950 dark:text-sand-800">
               Risk score {result.assessment.riskScore}/100 · {result.assessment.severity}
             </p>
-            <p className="text-xs text-sand-500">
+            <p className="text-xs text-sand-600">
               confidence {(result.assessment.confidence * 100).toFixed(0)}% of factors had data
             </p>
           </div>
@@ -1269,7 +1259,7 @@ export function AssessRiskButton({ tripId }: { tripId: string }) {
                     (not scored — no data)
                   </span>
                 )}
-                <span className="block text-sand-500">{factor.detail}</span>
+                <span className="block text-sand-600">{factor.detail}</span>
               </li>
             ))}
           </ul>
@@ -1338,14 +1328,14 @@ export function DocumentSearchForm({ tripId }: { tripId: string }) {
             className={inputClass}
           />
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" busy={busy}>
           {busy ? "Searching…" : "Search"}
         </Button>
       </form>
       <FormMessage message={message} />
       {result && (
         <div className="mt-3">
-          <p className="text-xs text-sand-500">
+          <p className="text-xs text-sand-600">
             {result.noEvidence
               ? "No indexed document content matched this query."
               : `${result.chunks.length} chunk${result.chunks.length === 1 ? "" : "s"} matched, ranked by cosine similarity.`}
@@ -1364,10 +1354,10 @@ export function DocumentSearchForm({ tripId }: { tripId: string }) {
                   className="rounded-lg border border-sand-200 p-3 dark:border-sand-200"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-xs font-medium text-navy-950 dark:text-navy-100">
+                    <span className="truncate text-xs font-medium text-navy-950 dark:text-sand-800">
                       {hit.originalFilename} · chunk {hit.chunkIndex + 1}
                     </span>
-                    <span className="flex-none text-xs text-sand-500">
+                    <span className="flex-none text-xs text-sand-600">
                       similarity {(hit.similarity * 100).toFixed(1)}%
                     </span>
                   </div>

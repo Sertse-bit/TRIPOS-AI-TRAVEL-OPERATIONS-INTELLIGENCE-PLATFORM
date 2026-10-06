@@ -29,7 +29,7 @@ export function auditActorPillClasses(actorType: AuditLogRecord["actorType"]): s
     case "AI_AGENT":
       return "bg-warn-100 text-warn-700 dark:text-warn-500";
     case "SYSTEM":
-      return "bg-sand-100 text-sand-600 dark:text-sand-500";
+      return "bg-sand-100 text-sand-600 dark:text-sand-600";
   }
 }
 
@@ -114,17 +114,17 @@ export function AuditEntryRow({ entry, tripTitle }: { entry: AuditLogRecord; tri
         >
           {auditActorLabel(entry)}
         </span>
-        <span className="text-sm font-medium text-navy-950 dark:text-navy-100">
+        <span className="text-sm font-medium text-navy-950 dark:text-sand-800">
           {auditActionLabel(entry.action)}
         </span>
         {tripTitle ? (
-          <span className="min-w-0 truncate text-xs text-sand-500">· {tripTitle}</span>
+          <span className="min-w-0 truncate text-xs text-sand-600">· {tripTitle}</span>
         ) : null}
-        <time className="ml-auto flex-none text-xs text-sand-400">
+        <time className="ml-auto flex-none text-xs text-sand-600">
           {formatAuditTime(entry.createdAt)}
         </time>
       </div>
-      <p className="mt-1 text-xs text-sand-500">
+      <p className="mt-1 text-xs text-sand-600">
         <span className="font-mono">{entry.action}</span> on {entry.entityType}
         {changed ? " · changed" : ""}
         {status ? ` · ${status}` : ""}

@@ -79,11 +79,11 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
     <div>
       <Link
         href={`/trips/${id}`}
-        className="text-sm text-sand-500 underline-offset-2 hover:underline"
+        className="text-sm text-sand-600 underline-offset-2 hover:underline"
       >
         ← Back to trip
       </Link>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+      <h1 className="mt-1 text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
         Itinerary &amp; budget
       </h1>
       <p className="mt-1 text-sm text-sand-600">
@@ -122,7 +122,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
                         {fmtDay(day)}
                       </p>
                       {dayItems.length === 0 ? (
-                        <p className="mt-1.5 text-xs text-sand-400">Nothing scheduled.</p>
+                        <p className="mt-1.5 text-xs text-sand-600">Nothing scheduled.</p>
                       ) : (
                         <ul className="mt-2 space-y-2">
                           {dayItems.map((item) => (
@@ -132,15 +132,15 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="font-medium text-navy-950 dark:text-navy-100">
+                                  <p className="font-medium text-navy-950 dark:text-sand-800">
                                     {item.title}
                                     {item.source === "AI_PLANNER" && (
-                                      <span className="ml-2 rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-600">
+                                      <span className="ml-2 rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-600 dark:text-navy-500">
                                         AI
                                       </span>
                                     )}
                                   </p>
-                                  <p className="mt-0.5 text-xs text-sand-500">
+                                  <p className="mt-0.5 text-xs text-sand-600">
                                     {item.startTime
                                       ? `${item.startTime}${item.endTime ? `–${item.endTime}` : ""} · `
                                       : ""}
@@ -190,13 +190,13 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
 
             {budget.configured ? (
               <div className="mt-3 space-y-2">
-                <p className="text-sm text-navy-950 dark:text-navy-100">
+                <p className="text-sm text-navy-950 dark:text-sand-800">
                   Cap{" "}
                   <strong>{formatMoney(budget.limit as number, budget.currency as string)}</strong>
                 </p>
 
                 {budget.converted ? (
-                  <p className="text-sm text-navy-950 dark:text-navy-100">
+                  <p className="text-sm text-navy-950 dark:text-sand-800">
                     Recorded costs total{" "}
                     <strong>
                       {formatMoney(budget.converted.total, budget.converted.currency)}
@@ -224,7 +224,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
                 )}
 
                 {budget.converted && budget.converted.lines.some((line) => line.rateAsOf) && (
-                  <ul className="text-xs text-sand-500">
+                  <ul className="text-xs text-sand-600">
                     {budget.converted.lines
                       .filter((line) => line.rateAsOf)
                       .map((line) => (
@@ -245,14 +245,14 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
 
             {budget.totalsByCurrency.length > 0 && (
               <div className="mt-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-sand-500">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sand-600">
                   Recorded costs by currency
                 </p>
-                <ul className="mt-1 space-y-0.5 text-sm text-navy-950 dark:text-navy-100">
+                <ul className="mt-1 space-y-0.5 text-sm text-navy-950 dark:text-sand-800">
                   {budget.totalsByCurrency.map((total) => (
                     <li key={total.currency}>
                       {formatMoney(total.amount, total.currency)}
-                      <span className="text-xs text-sand-500">
+                      <span className="text-xs text-sand-600">
                         {" "}
                         · {total.itemCount} item{total.itemCount === 1 ? "" : "s"}
                       </span>
@@ -263,7 +263,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
             )}
 
             {budget.itemsWithoutCost > 0 && (
-              <p className="mt-2 text-xs text-sand-500">
+              <p className="mt-2 text-xs text-sand-600">
                 {budget.itemsWithoutCost} item{budget.itemsWithoutCost === 1 ? " has" : "s have"} no
                 recorded cost and {budget.itemsWithoutCost === 1 ? "is" : "are"} excluded from these
                 totals — unknown costs are never assumed to be zero.

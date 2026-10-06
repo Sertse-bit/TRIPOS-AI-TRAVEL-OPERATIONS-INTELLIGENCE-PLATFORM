@@ -21,7 +21,7 @@ export default async function AuditPage() {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-navy-100">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy-950 dark:text-sand-800">
             Audit trail
           </h1>
           <p className="mt-1 text-sm text-sand-600">
@@ -57,7 +57,7 @@ export default async function AuditPage() {
         </Card>
       )}
 
-      <p className="mt-4 text-xs text-sand-500">
+      <p className="mt-4 text-xs text-sand-600">
         Every row carries the request ID that produced it, tying it to the same run visible in the
         API envelope and server logs.{" "}
         <Link href="/trips/observability" className="underline hover:text-sand-700">

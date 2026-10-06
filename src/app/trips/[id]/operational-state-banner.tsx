@@ -53,7 +53,7 @@ export function OperationalStateBanner({
           <li key={f}>• {f}</li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-sand-400">
+      <p className="mt-2 text-xs text-sand-600">
         Calculated {new Date(calculatedAt).toLocaleTimeString()} from the trip&apos;s flights and
         destinations.
       </p>

@@ -113,6 +113,15 @@ metric.
   request ID that produced it, the same one in the API envelope and the
   server logs. Reads are never logged, and nothing is ever back-filled.
 
+- **Accessibility (Phase 25)** — measured, not assumed: WCAG AA contrast
+  is enforced for the theme's text tokens in both light and dark mode, a
+  skip link and landmarks give keyboard users a way past the nav, the
+  current page is marked with `aria-current`, submit buttons announce
+  their busy state, form results are live regions, and the OS
+  reduced-motion setting is honoured. `docs/ACCESSIBILITY.md` records the
+  failures this found (dark mode's headings were 1.06:1 — invisible) and
+  what a static check still cannot see.
+
 See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
 `docs/ARCHITECTURE.md` for the architecture.
 

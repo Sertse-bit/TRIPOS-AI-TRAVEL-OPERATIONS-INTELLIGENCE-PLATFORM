@@ -111,7 +111,11 @@
     --navy-800: #1b4777;
     --navy-700: #24598c;
     --navy-600: #3a72ac;
-    --navy-500: #5589bf;
+    /* Phase 25: #5589bf measured 3.87:1 on the dark hover surface
+       (sand-200) and 4.10:1 on its own chip (navy-100) — both under the
+       4.5:1 AA floor for body text. One step lighter clears the floor on
+       every dark surface this palette renders text on. */
+    --navy-500: #6198cf;
     --navy-200: #2c3e55;
     --navy-100: #1b2738;
 
@@ -139,7 +143,10 @@
     --warn-700: #edbf83;
     --warn-100: #2d2312;
 
-    --alert-500: #e06f54;
+    /* Phase 25: #e06f54 measured 4.45:1 on the dark hover surface, a
+       hair under AA. One step lighter clears every dark surface while
+       staying the same terracotta. */
+    --alert-500: #e5765c;
     --alert-600: #e78770;
     --alert-700: #ed9f8d;
     --alert-100: #2e1713;
@@ -165,4 +172,19 @@ body {
 :focus-visible {
   outline: 2px solid var(--navy-700);
   outline-offset: 2px;
+}
+
+/* Phase 25: honour the OS "reduce motion" setting. Every interactive
+   element here transitions on hover/focus; for users who have asked for
+   less motion those are set to effectively instant rather than removed
+   (state changes still apply, they just stop animating). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
