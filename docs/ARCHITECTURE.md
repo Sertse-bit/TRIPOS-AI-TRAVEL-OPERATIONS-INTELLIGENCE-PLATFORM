@@ -1150,3 +1150,46 @@ tests              api-route-table.test.ts  routes ↔ docs/API.md
   restatement.
 - **The index is checked too:** a document nobody linked, or a link to a
   file that doesn't exist, fails `docs-index.test.ts`.
+- **Guards that read text must tolerate the formatter that owns it.** The
+  route-table parser first matched the hand-written table and then found
+  the pre-commit hook had padded every cell; CI failed on the commit that
+  introduced it (`expected 33 to be 34`), and the fix was to accept any
+  run of whitespace between cells. A guard over markdown cannot assume
+  markdown keeps its line breaks.
+
+## 33. Final Engineering Audit (Phase 33)
+
+The audit's product is the checks it leaves behind. Two review-discipline
+rules became tests, and one real violation was found and fixed.
+
+```text
+modules/module-boundaries.test.ts    cross-module value imports must go
+                                     through a *-service; type-only and
+                                     own-module imports are exempt, each
+                                     for a stated reason
+                                     + a pinned list of the 16 outside-
+                                     module repository imports (ratchet:
+                                     the list can only change on purpose)
+test-suite-integrity.test.ts         no .only / .skip / .todo anywhere;
+                                     no test file without tests
+```
+
+- **What the audit found:** the notification module was importing
+  `trip/notification-repository` — storage that has never touched a trip
+  column — since Phase 8. Moved to `modules/notification/`, import paths
+  only. That is the whole diff of a fix the boundary test now prevents
+  from recurring.
+- **Ratchet instead of silence for the rest:** 16 places outside
+  `src/modules` (AI agents and tools, the two auth routes, the
+  resilience layer) import module repositories directly. Exceeding the
+  rule's letter but not its spirit, they are pinned in the test rather
+  than fixed in the audit phase — the fix changes agent behaviour
+  (service calls that also write the events the tools write themselves),
+  and an audit should not be the place behaviour changes.
+- **Tests check the suite too:** a green run says nothing about tests
+  that were `.skip`ped out of it, so absence of skips is asserted.
+- **The final state is a table, not an adjective:** 484/484 tests over 51
+  files, typecheck, lint, build, CI green, both databases empty — each
+  row of Phase 33's verification table was produced by running the
+  command, and the known debt (unconfigured LLM key, no browser, no
+  container runtime locally, no deploy target) is listed with it.

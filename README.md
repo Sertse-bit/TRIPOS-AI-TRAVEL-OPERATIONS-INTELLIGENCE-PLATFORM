@@ -14,7 +14,7 @@ metric.
 - **Redis** (rate limiting, resilience cache)
 - **Anthropic** SDK behind a typed, bounded AI tool layer
 - **Tailwind CSS v4** with a project-specific theme token set
-- Vitest for tests (470 tests across 47 files, real Postgres/Redis where
+- Vitest for tests (484 tests across 51 files, real Postgres/Redis where
   database properties matter); pnpm for package management
 
 ## What works today

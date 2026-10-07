@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineTool } from "@/ai/tools/types";
 import { getTrip } from "@/modules/trip/trip-service";
 import { createRecommendation } from "@/modules/trip/recommendation-repository";
-import { createNotification } from "@/modules/trip/notification-repository";
+import { createNotification } from "@/modules/notification/notification-repository";
 import { recordTripEvent } from "@/modules/trip/trip-event-repository";
 
 /**

@@ -38,6 +38,13 @@ function mapRow(row: {
  * pass runs at all (with a per-trip severity floor). Anything writing a
  * notification for a condition that can repeat — i.e. anything a
  * schedule can trigger — should go through that service, not here.
+ *
+ * Phase 33 (Final Engineering Audit): moved here from
+ * `modules/trip/`, where it had been living since Phase 8 even though it
+ * touches no trip column. The notification module owns the concept, and
+ * the audit's boundary check fails on a module reaching into another
+ * module's repository — which this file was making the notification
+ * service do. Nothing but the import path changed.
  */
 export async function createNotification(input: {
   userId: string;

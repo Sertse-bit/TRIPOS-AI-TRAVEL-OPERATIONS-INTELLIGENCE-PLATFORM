@@ -2778,6 +2778,15 @@ assumed**: renaming one path in the route table (`/api/trips/[id]/watch`
 was then reverted. The full suite — **478/478 tests (49 files)** — plus
 typecheck, lint, and build are green.
 
+**And the guard earned its keep on its own first run.** The pre-commit
+hook runs `prettier --write` on staged markdown, which pads table cells to
+align them; the parser had been written against the unformatted table and
+matched **zero** rows of the committed one. CI reported it as a real
+failure (`expected 33 to be 34`), not a flake — the parser now accepts
+cell whitespace of any length. That is the exact failure mode this phase
+exists to prevent, caught by the mechanism it built, on GitHub rather
+than by a reader in six months.
+
 **Known limitations:** `docs/API.md` documents each endpoint's shape and
 behaviour, not a machine-readable request/response schema per route —
 there is no OpenAPI contract, because generating one honestly would need
@@ -2793,4 +2802,80 @@ for.
 
 ## Phase 33 — Final Engineering Audit
 
-**Status:** Not started
+**Status:** Complete — the last phase.
+
+An audit, not a feature: re-verify the whole build from the outside in,
+and turn the review-discipline rules into checks that fail the build
+instead of relying on someone remembering them.
+
+**The audit found one real boundary violation, and it was fixed.**
+`modules/trip/notification-repository.ts` — pure notification storage,
+no trip column in it — had been imported by the notification module
+(`notification-service.ts`) since Phase 8, which is a module reaching
+into another module's internals. It now lives at
+`modules/notification/notification-repository.ts` where it belongs; only
+import paths changed (two importers: the service and the AI tool layer),
+and the full suite passes unchanged.
+
+**Three guards added (6 new tests, 484 total across 51 files):**
+
+- **`modules/module-boundaries.test.ts`** — walks every production module
+  file, parses its imports, and fails on any **value** import whose
+  specifier names a different module unless the target is that module's
+  `*-service` (the public interface). Type-only imports, a module's own
+  files, and test fixtures are excluded, each for a stated reason.
+  Mutation-checked: adding an import of `trip/flight-repository` to the
+  notification service made it fail with the exact line
+  `src/modules/notification/notification-service.ts ->
+@/modules/trip/flight-repository [findFlightsByTripId]`.
+- **Same file, the ratchet on the rule's letter:** 16 places _outside_
+  `src/modules` — the AI agent and tool layers (13), the two auth routes
+  (2), and the resilience layer (1) — import module repositories directly.
+  That is outside AGENTS.md's rule (which constrains modules) but inside
+  its spirit, so it is **pinned as a list**: a new one fails the test
+  until added deliberately, and a removed one fails it too, so the list
+  can only shrink on purpose. Moving them to service calls was not done
+  here because it changes agent behaviour (e.g.
+  `createTripRecommendation` writes the trip event the tool writes
+  itself), and behaviour changes don't belong in an audit.
+- **`test-suite-integrity.test.ts`** — no `.only`, `.skip`, or `.todo`
+  anywhere in the suite, and no test file without tests. Both failure
+  modes are invisible in a green summary line, which is exactly why they
+  are asserted rather than hoped for.
+
+**What was re-verified, in this final state:**
+
+| Check                                       | Result                                         |
+| ------------------------------------------- | ---------------------------------------------- |
+| `pnpm typecheck` / `pnpm lint`              | clean                                          |
+| `pnpm test`                                 | **484 / 484** across 51 files                  |
+| `pnpm build`                                | compiles; all routes present                   |
+| CI on the pushed tree                       | green (2 jobs: quality + docker)               |
+| Route table ↔ code                          | 34 routes, methods match (Phase 32 guard)      |
+| Docs index ↔ docs/                          | complete, links resolve (Phase 32 guard)       |
+| Every API route wrapped in `withApiHandler` | 34 / 34                                        |
+| No skipped or focused tests                 | confirmed by test                              |
+| `console.log` in production `src/`          | none                                           |
+| `NEXT_PUBLIC_` secrets                      | none (existing `env-safety.test.ts` guards it) |
+| Dev database                                | 0 users, 0 trips, 0 audit rows, 0 events       |
+| Test database                               | 0 users, 0 trips, 0 events                     |
+
+**Known debt, recorded rather than resolved:**
+
+- The 16 outside-module repository imports listed above (AI agents/tools,
+  auth routes, resilience layer). The correct fix is service functions
+  the tool layer can call; three of them don't exist yet.
+- `ANTHROPIC_API_KEY` is still unconfigured, so the LLM-dependent paths
+  (planner, research, risk explanation, command bar) have only ever
+  returned their honest `502 PROVIDER_ERROR` — never a live success.
+- No browser in this build environment: no axe run, no E2E, no
+  rendered-pixel verification (Phases 25/26/27).
+- No container runtime here either: the Dockerfile is built by CI, not
+  by this sandbox, and `docker compose up` has never been run (Phase 30).
+- No deployment target exists, so nothing is deployed and no deploy
+  pipeline is configured (Phase 31 deliberately ships no deploy job).
+
+**Build complete.** Phases 0–33 are all Complete, each with its own
+verification section above; the repository is in a working state —
+484 tests green, typecheck, lint, build, and CI all passing, databases
+empty, and the guards in place to keep those statements true.

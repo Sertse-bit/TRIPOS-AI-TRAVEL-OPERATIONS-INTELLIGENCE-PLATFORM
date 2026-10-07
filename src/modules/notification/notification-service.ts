@@ -2,7 +2,7 @@ import { pool } from "@/infrastructure/db";
 import {
   type NotificationRecord,
   findNotificationsByUserId,
-} from "@/modules/trip/notification-repository";
+} from "@/modules/notification/notification-repository";
 
 export type { NotificationRecord };
 export { findNotificationsByUserId };
