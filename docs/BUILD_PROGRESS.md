@@ -2667,9 +2667,9 @@ build` and `docker compose up` were **never executed**. An attempt to
 
 ## Phase 31 — CI/CD
 
-**Status:** Complete (workflow written; every step rehearsed locally in the
-same order — the hosted runner itself cannot execute in this sandbox, and
-that limitation is written down rather than assumed away)
+**Status:** Complete — and then actually executed: the workflow's first
+run on GitHub finished **green**, both jobs, and the log is quoted below
+rather than described from the file alone.
 
 **`.github/workflows/ci.yml`**, two jobs, triggered on push to `main`, on
 pull requests, and on manual dispatch, with in-progress runs cancelled per
@@ -2697,22 +2697,43 @@ typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Node 22 and pnpm are
   project yet. A job that pushes an image nowhere is theatre; when a
   target exists, it belongs here as a third job gated on `main`.
 
-**Verification — what was actually run.** The workflow's steps were
-rehearsed locally **in the same order with the same environment**: a fresh
-database created by the exact `psql` invocation the workflow uses,
-followed by typecheck, lint, **470/470 tests against that fresh database**,
-and a green build, all with the workflow's `TEST_DATABASE_URL`,
-`TEST_REDIS_URL`, and `AUTH_SECRET` values set. The YAML parses and its
-structure (triggers, two jobs, service containers, step order) was
-asserted programmatically.
+**Verification — what was actually run, locally and on GitHub.**
 
-**Known limitations:** GitHub Actions itself — the runner, the service
-container lifecycle, the action versions — cannot execute in this
-sandbox, and neither can the `docker` job (no container runtime, see
-Phase 30). Those two steps are therefore the ones being executed _for_
-the first time by CI's first run rather than before it. Nothing in the
-workflow's local half depends on them: every command CI runs has been run
-here.
+- **Locally**, before the workflow existed: the steps were rehearsed in
+  the same order with the same environment — a fresh database created by
+  the exact `psql` invocation the workflow uses, then typecheck, lint,
+  **470/470 tests against that fresh database**, and a green build, all
+  with the workflow's `TEST_DATABASE_URL`, `TEST_REDIS_URL`, and
+  `AUTH_SECRET` values set. The YAML parses and its structure (triggers,
+  two jobs, service containers, step order) was asserted programmatically.
+- **On GitHub**, run `37597036387` (push to `main`, first ever run):
+  `✓ Typecheck, lint, test, build in 1m27s` and `✓ Compose config, image
+build in 1m07s`. The log shows the bootstrap step executing against
+  the real service container, `Test Files 47 passed (47)` in CI, and the
+  image built to completion — `writing image sha256:81f414a7… done`,
+  `naming to docker.io/library/tripos:ci done`. **Phase 30's
+  never-executed Dockerfile therefore has now been built for real**, which
+  is exactly what that job was written to close.
+
+**Follow-up from that run's annotations.** The runner reported that
+`actions/checkout@v4`, `actions/setup-node@v4` and `pnpm/action-setup@v4`
+target Node 20 (deprecated, being forced onto Node 24), and that the
+`ubuntu-latest` label migrates to Ubuntu 26 on 19 October 2026. Both were
+fixed deliberately rather than ignored: the three actions were bumped to
+current majors (`checkout@v7`, `setup-node@v7`, `pnpm/action-setup@v6` —
+input names confirmed against each action's own `action.yml` first), and
+the runner is now pinned to `ubuntu-24.04` so a base-image migration is a
+change we make, on our schedule, instead of one a label makes silently.
+
+**Known limitations:** the Actions-specific mechanics — service
+container lifecycle, action internals — can only be exercised by a real
+run, and the `docker` job cannot execute in this sandbox at all (no
+container runtime, see Phase 30); both have now had one real green run,
+but a single run is one data point, not a guarantee of future runs. The
+docker job builds the image; it does not run the stack (no
+`docker compose up` smoke test yet — that would need the compose file
+exercised end to end, which is the natural next thing to add when a
+follow-up phase needs the container running in CI).
 
 **Next phase:** Phase 32 — Documentation.
 

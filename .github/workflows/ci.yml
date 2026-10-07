@@ -36,7 +36,12 @@ concurrency:
 jobs:
   quality:
     name: Typecheck, lint, test, build
-    runs-on: ubuntu-latest
+    # Pinned rather than `ubuntu-latest`: the label migrates to Ubuntu 26
+    # from 19 October 2026 (GitHub's own annotation on this workflow's
+    # first run), and a base-image change is exactly the kind of silent
+    # environment shift CI exists to make visible — on our schedule, not
+    # announced by a label.
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -74,15 +79,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         # No version input: package.json's "packageManager" field is the
         # single source of truth.
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -119,11 +124,12 @@ jobs:
 
   docker:
     name: Compose config, image build
-    runs-on: ubuntu-latest
+    # Same pin as the quality job — see its comment.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate the compose file
         # Interpolation with a real secret value is part of validation: a
