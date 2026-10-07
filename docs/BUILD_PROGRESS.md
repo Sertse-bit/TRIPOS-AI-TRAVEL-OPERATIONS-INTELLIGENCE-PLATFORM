@@ -2421,7 +2421,79 @@ clean; dev and test databases both left at zero rows.
 
 ## Phase 28 — Failure Testing
 
-**Status:** Not started
+**Status:** Complete
+
+The gaps chosen were the failure paths whose wrong behaviour is silent: a
+provider outage that reads as "you are logged out", a lost audit row that
+fails a change which already committed, and an email-verification check
+that takes registration down with it. Four new files, 26 tests.
+
+- **`modules/auth/access-control.test.ts` (7 tests).** `requireAuth` is
+  the first line of 25 route handlers. An absent session, and a session
+  whose user row is gone, both become the same `UnauthenticatedError` —
+  never a thrown raw error (which would be a 500) and never a null user
+  that downstream code has to remember to check. A **database outage**
+  propagates as-is: reading an outage as "not logged in" would lock every
+  user out while telling them their session expired. `requireRole`
+  refuses with a message about the role, not the person — pinned so no
+  future edit echoes an email or id into an envelope or a log line.
+- **`app/require-auth.test.ts` (6 tests).** The page-level twin, whose
+  failure mode is a redirect. Anonymous visitors must land on
+  `/login?returnTo=…` with the destination **encoded**, not concatenated
+  — unencoded, a destination carrying its own query string would be
+  truncated to nothing. A backend failure propagates to the error
+  boundary instead of bouncing to `/login` (which would look like an
+  expired session), and a deleted-account session is anonymous, not a
+  half-rendered page.
+- **`modules/audit/audit-write-failure.test.ts` (8 tests).** The Phase 24
+  contract, with the audit insert stubbed to fail: `recordUserAction`
+  and `recordAgentDelivery` return synchronously and never reject into
+  the caller (the mutation they describe already committed), log at warn
+  with the requestId and action so the loss is never silent, and write
+  the actor attribution they were given rather than anything invented.
+  The deliberate asymmetry is pinned too: `recordSystemAction` **is**
+  awaited, so a sweep cannot report a pass whose audit row was never
+  written.
+- **`modules/auth/email-deliverability.test.ts` (5 tests).** The signup
+  path's third-party check: a real "undeliverable" verdict stops
+  registration with a message the user can act on, while a provider
+  timeout, an unexpected `TypeError`, or any other provider trouble gets
+  out of the way. Failing open is a policy, so it is asserted rather
+  than assumed.
+
+**Not duplicated, deliberately.** The notification dedupe claim
+(`monitor-service.test.ts`) and the withheld budget conversion
+(`itinerary-service.test.ts`) were surveyed first and already covered at
+this level; the resilience layer, orchestrator limits, and every agent
+boundary were covered by Phases 6–23. This phase adds only what was
+missing rather than restating what existed.
+
+**One production change, small and for testability:** the register
+route's `checkEmailDeliverability` moved verbatim to
+`modules/auth/email-deliverability.ts` as `assertEmailDeliverable`, so
+the fail-open policy could be tested through the real function instead of
+a mocked-out signup. Behaviour is unchanged (the route calls it at the
+same point), and the live smoke below exercises the moved code end to
+end.
+
+**Verification:** 464/464 tests (46 files), typecheck, lint, and build
+clean. Live smoke through the running preview: `POST
+/api/auth/register` returned 200 with the success envelope and a
+`requestId`, and the fire-and-forget `auth.register` audit row landed
+with that same requestId (fire-and-forget means it is not part of the
+response — checkable only by reading the row, which is what was done).
+The smoke user and its rows were deleted afterwards; dev and test
+databases are both back at zero rows.
+
+**Known limitations:** the live smoke covers the deliverable path only —
+exercising "undeliverable" against the real provider needs a
+`MAILBOXLAYER_API_KEY` that is not configured here, and the test for it
+runs against a stubbed provider by necessity. Audit-write failure is
+stubbed at the repository boundary rather than by breaking Postgres
+mid-suite. No browser in the sandbox, so none of this is asserted
+through a real login page render.
+
+**Next phase:** Phase 29 — Performance.
 
 ---
 

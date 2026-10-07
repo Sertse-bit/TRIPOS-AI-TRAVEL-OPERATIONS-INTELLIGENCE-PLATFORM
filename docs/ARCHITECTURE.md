@@ -997,3 +997,36 @@ session token hashing → the raw token exists only in the cookie value;
   effect's pixels cannot be asserted without a browser (its plumbing is);
   and coverage tooling is deliberately not installed until a number would
   change a decision.
+
+## 28. Failure Testing (Phase 28)
+
+Failure paths are classified by what their wrong version would do, and
+the two gates get opposite treatment on purpose:
+
+```text
+requireAuth / requireSession   absent or deleted-account session → 401 /
+                               redirect WITH an encoded returnTo
+                               database outage → propagates (500 / error
+                               boundary). An outage is not a logout.
+audit writes                  USER + AI_AGENT: fire-and-forget, never
+                               reject into a caller whose mutation already
+                               committed; logged at warn with the requestId
+                               SYSTEM (watch sweeps): awaited, because a
+                               sweep report must not outrun its own row
+signup deliverability          only a real "undeliverable" verdict stops
+                               registration; provider trouble fails open
+```
+
+- **The rule behind the asymmetry:** the writer that describes something
+  that already happened must never fail the thing it describes; the
+  writer that backs a claim the caller is about to make must be awaited.
+  Both directions are now pinned by tests, so neither can drift into the
+  other silently.
+- **Testability is a design property, not an afterthought:** the signup
+  deliverability policy lives in `modules/auth/email-deliverability.ts`
+  rather than inside the route, so it is tested through the real
+  function instead of a mocked-out registration.
+- **Stubbed at the true boundary:** these tests break the provider call
+  or the insert, never the database the whole suite shares, and they
+  assert the caller's contract (return value, rejection, log line) rather
+  than an internal call count alone.
