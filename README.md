@@ -196,6 +196,16 @@ which seeds the test database, reports SQL round trips and median
 milliseconds per page path, and deletes everything it created — see
 docs/BUILD_PROGRESS.md (Phase 29) for the numbers and the method.
 
+### Continuous integration
+
+Every push to `main` and every pull request runs typecheck, lint, and the
+full suite against a real Postgres + pgvector and Redis created from
+`prisma/sql/bootstrap.sql`, then builds the app and assembles the Docker
+image (`.github/workflows/ci.yml`). No secrets are configured for CI: the
+test suite is hermetic by design, so there is nothing for it to receive —
+which also means an LLM-dependent path must refuse honestly in CI, exactly
+as it does locally.
+
 The app fails fast at startup if `DATABASE_URL` or `AUTH_SECRET` is
 missing — a misconfigured environment should not limp into confusing
 runtime errors later.

@@ -1097,3 +1097,28 @@ docker-compose.yml         app + pgvector/pgvector:pg16 + redis:7,
   sandbox has no container runtime, so no image was built and no stack was
   started here; the bootstrap DDL _was_ verified by running the whole suite
   against a database it created, which is the part most likely to be wrong.
+
+## 31. Continuous Integration (Phase 31)
+
+```text
+quality job   pgvector:pg16 + redis:7 service containers (health-gated)
+              install → create test DB from prisma/sql/bootstrap.sql
+              → typecheck → lint → test → build
+docker job    docker compose config -q → docker build -t tripos:ci .
+```
+
+- **CI proves the bootstrap, not just the code.** The test database is
+  created fresh from the committed DDL on every run, so a change that makes
+  `bootstrap.sql` unable to build a database the suite passes against
+  fails CI instead of surfacing the first time someone deploys.
+- **The suite is hermetic, so CI needs no secrets.** Provider keys are
+  written as fake values by `vitest.setup.ts` and every provider test
+  stubs fetch; `ANTHROPIC_API_KEY` is absent on purpose so the LLM paths
+  must refuse honestly in CI too. No secret store, no environment
+  configuration, nothing to rotate.
+- **The docker job is where Phase 30's image actually gets built** — the
+  build sandbox had no container runtime, and that gap is closed by CI
+  rather than papered over with a claim of verification.
+- **No deploy job yet, deliberately:** there is no deployment target, and
+  a job that deploys nowhere is theatre. It slots in as a third job gated
+  on `main` when one exists.

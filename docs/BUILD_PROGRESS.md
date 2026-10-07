@@ -2667,7 +2667,54 @@ build` and `docker compose up` were **never executed**. An attempt to
 
 ## Phase 31 — CI/CD
 
-**Status:** Not started
+**Status:** Complete (workflow written; every step rehearsed locally in the
+same order — the hosted runner itself cannot execute in this sandbox, and
+that limitation is written down rather than assumed away)
+
+**`.github/workflows/ci.yml`**, two jobs, triggered on push to `main`, on
+pull requests, and on manual dispatch, with in-progress runs cancelled per
+branch:
+
+- **`quality`** — Postgres 16 + pgvector and Redis 7 as health-gated
+  service containers, then, in order: `pnpm install --frozen-lockfile`,
+  **the test database created from the committed `prisma/sql/bootstrap.sql`
+  with the exact `psql … -v ON_ERROR_STOP=1 -f` invocation**, `pnpm
+typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Node 22 and pnpm are
+  pinned (pnpm's version comes from package.json's `packageManager`, not
+  a second copy in the workflow).
+- **`docker`** — `docker compose config -q` (which validates the
+  `${AUTH_SECRET:?…}` interpolation with a value set, so a malformed
+  variable fails here rather than at `up`) and `docker build -t tripos:ci
+.`. This is **Phase 30's missing execution**: the build sandbox had no
+  container runtime, so the image had never been assembled; CI does it on
+  every push.
+- **No secrets are wired in.** The suite is hermetic by construction
+  (`vitest.setup.ts` writes fake provider keys unconditionally, and every
+  provider test stubs fetch), so there is nothing for CI to receive — and
+  `ANTHROPIC_API_KEY` is deliberately absent, meaning the LLM-dependent
+  paths must refuse honestly in CI exactly as they do locally.
+- **No deploy job, on purpose.** There is no deployment target for this
+  project yet. A job that pushes an image nowhere is theatre; when a
+  target exists, it belongs here as a third job gated on `main`.
+
+**Verification — what was actually run.** The workflow's steps were
+rehearsed locally **in the same order with the same environment**: a fresh
+database created by the exact `psql` invocation the workflow uses,
+followed by typecheck, lint, **470/470 tests against that fresh database**,
+and a green build, all with the workflow's `TEST_DATABASE_URL`,
+`TEST_REDIS_URL`, and `AUTH_SECRET` values set. The YAML parses and its
+structure (triggers, two jobs, service containers, step order) was
+asserted programmatically.
+
+**Known limitations:** GitHub Actions itself — the runner, the service
+container lifecycle, the action versions — cannot execute in this
+sandbox, and neither can the `docker` job (no container runtime, see
+Phase 30). Those two steps are therefore the ones being executed _for_
+the first time by CI's first run rather than before it. Nothing in the
+workflow's local half depends on them: every command CI runs has been run
+here.
+
+**Next phase:** Phase 32 — Documentation.
 
 ---
 

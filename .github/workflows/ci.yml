@@ -1,0 +1,139 @@
+# TripOS CI — Phase 31.
+#
+# One quality job (typecheck → lint → test → build) against a real
+# Postgres+pgvector and a real Redis, plus a docker job that validates the
+# compose file and assembles the image.
+#
+# Two things this workflow deliberately does NOT do:
+#
+#   * **No provider secrets.** The suite is hermetic by construction —
+#     vitest.setup.ts writes fake (non-functional) provider keys
+#     unconditionally so real-adapter tests exercise their request
+#     building through a stubbed fetch, and nothing in CI can reach out to
+#     a real provider. ANTHROPIC_API_KEY is not provided, so the paths that
+#     need it must fail honestly, exactly as they do locally.
+#   * **No deploy job.** There is no deployment target configured for this
+#     project yet, and a job that pushes an image nowhere is theatre. When
+#     one exists, it belongs here as a separate job gated on `main`.
+#
+# The test database is created from prisma/sql/bootstrap.sql — the same
+# file docker-compose.yml uses — so CI proves that file creates a database
+# the suite passes against, on every run.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tripos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tripos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      # The vitest setup (vitest.setup.ts) reads these and sets the rest
+      # unconditionally, so a CI workspace can never silently run against a
+      # developer's real database or real keys.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tripos_test
+      TEST_REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6379
+      AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        # No version input: package.json's "packageManager" field is the
+        # single source of truth.
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create the test database from the committed bootstrap
+        run: |
+          psql -h localhost -p 5432 -U postgres -d tripos_test \
+            -v ON_ERROR_STOP=1 -f prisma/sql/bootstrap.sql
+        env:
+          PGPASSWORD: postgres
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          # The build imports the app's modules, and src/config/env.ts
+          # fails fast without these. Same placeholder contract as the
+          # Dockerfile's build stage — nothing here contacts a database or
+          # a cache; only static generation runs.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+
+  docker:
+    name: Compose config, image build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate the compose file
+        # Interpolation with a real secret value is part of validation: a
+        # malformed ${AUTH_SECRET:?...} fails here rather than at `up`.
+        run: docker compose config -q
+        env:
+          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+
+      - name: Build the image
+        # Phase 30's honest gap: no container runtime existed in the build
+        # sandbox, so the Dockerfile was never assembled. This is where it
+        # actually gets built for the first time.
+        run: docker build -t tripos:ci .
