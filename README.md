@@ -149,6 +149,24 @@ phase adds (also committed as executable DDL in
 plus trip budget columns from
 `prisma/sql/phase-20-itinerary-planner.sql`.
 
+### Docker instead of local infra
+
+The whole stack (app + Postgres with pgvector + Redis) runs from this repo,
+including the schema:
+
+```bash
+AUTH_SECRET=$(openssl rand -hex 32) docker compose up --build
+```
+
+`AUTH_SECRET` is required and compose refuses to start without it. The
+database is created from `prisma/sql/bootstrap.sql` on the volume's first
+initialization only, so after editing that file: `docker compose down -v`.
+Provider keys are optional — the stack runs fine with none of them, using
+the documented mock adapters (except `ANTHROPIC_API_KEY`, which has no mock
+by design).
+
+### Or run it directly
+
 Install and configure:
 
 ```bash

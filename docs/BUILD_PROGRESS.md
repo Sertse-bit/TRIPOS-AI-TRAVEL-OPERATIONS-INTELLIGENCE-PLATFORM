@@ -2583,7 +2583,85 @@ more than a benchmark that pollutes it.
 
 ## Phase 30 — Docker
 
-**Status:** Not started
+**Status:** Complete (artifacts written and verified as far as this sandbox
+allows — see the limitation at the end; no image was built here)
+
+**The gap this phase found first.** Docker needs a way to create a fresh
+database, and there wasn't one: `prisma generate`/`migrate` cannot run in
+this build sandbox (they download a schema-engine binary, see
+`docs/DATABASE.md`), no `prisma/migrations/` directory exists, and the
+Phase 3 DDL that was hand-applied had never been committed as a file. So
+"bring up an empty instance" was, until now, undoable from the repo alone.
+
+- **`prisma/sql/bootstrap.sql`** — the complete DDL for a fresh database,
+  dumped from the live schema with `pg_dump --schema-only --no-owner
+--no-privileges` (19 tables, 10 enum types, 44 indexes, including the
+  Phase 19/20 additions that only exist as explicit DDL). Three edits to
+  the raw dump, each stated in the file's own header: `CREATE EXTENSION
+IF NOT EXISTS vector` prepended (the dump omitted it although every
+  embedding column depends on it), `CREATE SCHEMA public` → `IF NOT
+EXISTS` (a fresh database already has it), and pg_dump's
+  `\restrict`/`\unrestrict` guard lines removed so the file applies with
+  any psql. **Verified by construction**: applied to a scratch database,
+  which then ran the **entire test suite — 470/470 — against a schema that
+  exists only because this file created it**.
+- **`Dockerfile`** — install, build, run: `node:22-alpine` with pnpm via
+  corepack, dependencies installed from the lockfile alone (so a source
+  edit doesn't re-install), `next build`, then a runtime stage that ships
+  only `.next`, `node_modules` and the manifests, running as the
+  non-root `node` user with a `/api/health` healthcheck. The build stage
+  **deliberately sets placeholder `DATABASE_URL`/`AUTH_SECRET`/`REDIS_URL`
+  values**: `next build` imports the app's modules and `config/env.ts`
+  fails fast without them (that the three placeholders are exactly the
+  three required keys is checked, not assumed). No `output:
+"standalone"` is added, so the entry point is the same `pnpm start` the
+  README documents.
+- **`docker-compose.yml`** — `app` + `pgvector/pgvector:pg16` + `redis:7`,
+  with healthcheck-gated startup (`app` waits for `service_healthy` db and
+  cache) and the schema applied by mounting the bootstrap file into
+  Postgres's own `/docker-entrypoint-initdb.d`, which runs only on an
+  empty data directory — idempotency by construction rather than a guard
+  in a script. `AUTH_SECRET` has **no default** and compose refuses to
+  start without it (`${AUTH_SECRET:?…}`), the same fail-fast contract the
+  process applies.
+- **`.dockerignore`** — keeps `node_modules`, `.next`, `.git`, every
+  `.env*` except the committed `.env.example`, and `docs/` out of the
+  build context, so a secret cannot be baked into a layer by accident.
+
+**Verification, exactly and only what was actually run:**
+
+- The bootstrap applied cleanly to a scratch database (`ON_ERROR_STOP=1`,
+  zero errors): 19 tables, 10 enums, 44 indexes — matching the source
+  database's counts — and then **470/470 tests passed against it**.
+- The build stage's command was run with the Dockerfile's exact
+  placeholder values (`DATABASE_URL`, `AUTH_SECRET`, `REDIS_URL`) and
+  compiled successfully.
+- `docker-compose.yml` parses as YAML and every path, image, service name
+  and command it references was checked against the repo (`pnpm start`
+  exists, `/api/health` exists, `prisma/sql/bootstrap.sql` exists, no
+  `public/` directory is copied because there isn't one).
+
+**Known limitations:**
+
+- **This sandbox has no container runtime at all** — no `docker`,
+  `podman`, `buildah` or `nerdctl` binary and no daemon — so `docker
+build` and `docker compose up` were **never executed**. An attempt to
+  reproduce the build stage in a pristine copy of the committed tree
+  (which would have proven the build works with _no_ env file present)
+  was killed by the sandbox's memory limit. What that leaves unverified is
+  the image assembly itself (layer copying, `corepack enable`, the runtime
+  stage's file list) and the compose wiring. Phase 31's CI workflow is
+  where this gets its first real execution.
+- The compose file pins `pgvector/pgvector:pg16`, but the DDL was verified
+  on PostgreSQL 14 (what this sandbox runs). Nothing in the bootstrap is
+  version-gated (no 16-only syntax; `CREATE EXTENSION vector` needs
+  pgvector ≥ 0.5, and the image ships far newer), but applying it to 16 is
+  unexercised here.
+- The schema is applied only when the data volume is empty, so editing
+  `bootstrap.sql` needs `docker compose down -v`. That is stated in the
+  file where a user will hit it, not hidden.
+
+**Next phase:** Phase 31 — CI/CD.
 
 ---
 

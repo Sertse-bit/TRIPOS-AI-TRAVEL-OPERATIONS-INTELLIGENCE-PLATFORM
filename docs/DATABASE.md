@@ -300,6 +300,32 @@ Design notes worth recording:
   calls, so it is worth a constraint no application path can bypass. The
   cost is stated below.
 
+## Bootstrapping a fresh database (Phase 30)
+
+`prisma/sql/bootstrap.sql` is the complete DDL for an empty database — the
+same 19 tables, 10 enum types and 44 indexes the application runs against,
+including the Phase 19/20 additions that exist only as explicit DDL. It was
+dumped from the live schema with `pg_dump --schema-only --no-owner
+--no-privileges`, then edited in three stated ways (see the file's header):
+the `vector` extension creation is prepended, `CREATE SCHEMA public` became
+`IF NOT EXISTS`, and pg_dump's `\restrict`/`\unrestrict` guard lines were
+removed so any psql can apply it.
+
+```bash
+psql -d tripos -v ON_ERROR_STOP=1 -f prisma/sql/bootstrap.sql
+```
+
+**Verified:** the file was applied to a scratch database, which then ran the
+entire test suite (470/470) — so a database created only by this file
+satisfies every property the suite asserts, including the enum casts, the
+`dedupe_key` uniqueness and the pgvector column.
+
+This is the path for Docker (`docker-compose.yml` mounts it into Postgres's
+`/docker-entrypoint-initdb.d`) and for CI. It does **not** replace
+`prisma migrate`: once an environment with normal internet access runs
+`pnpm db:migrate`, generated migrations become the ongoing mechanism and
+this file stays the "empty database" shortcut.
+
 ## Known gaps (honest, not hidden)
 
 - **Raw SQL against enum columns needs an explicit cast** (e.g.

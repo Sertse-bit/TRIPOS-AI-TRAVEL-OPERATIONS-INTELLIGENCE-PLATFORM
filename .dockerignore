@@ -1,0 +1,20 @@
+# Keep the build context to source. Anything here is either regenerated in
+# the image (node_modules, .next) or must never be copied into it (.env*,
+# git history). docs/ is excluded too: nothing at runtime reads it, and it
+# is the largest directory in the repo after node_modules.
+
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+docs
+prisma/sql
+scripts/bench-read-paths.ts
+*.md
+.DS_Store
+Dockerfile
+docker-compose.yml
+.dockerignore

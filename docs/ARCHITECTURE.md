@@ -1068,3 +1068,32 @@ digital twin (embeds the above)   12 queries          9 queries
 - **No caching was added, deliberately:** these pages render live
   operational state, and staleness would be a worse defect than the
   milliseconds a cache would buy.
+
+## 30. Running the Stack (Phase 30)
+
+```text
+prisma/sql/bootstrap.sql   complete DDL for an empty database; the honest
+                           replacement for the migrations this sandbox
+                           cannot generate
+Dockerfile                 deps (lockfile only) → build (placeholder env,
+                           since config/env.ts fails fast) → runner
+                           (non-root, .next + node_modules, /api/health)
+docker-compose.yml         app + pgvector/pgvector:pg16 + redis:7,
+                           startup gated on service_healthy, schema applied
+                           via /docker-entrypoint-initdb.d (first boot only)
+```
+
+- **Configuration stays fail-fast, one layer up as well as in-process:**
+  the app refuses to boot without `DATABASE_URL`/`AUTH_SECRET`, and compose
+  refuses to start the stack without `AUTH_SECRET` (`${AUTH_SECRET:?…}`)
+  rather than defaulting to something guessable.
+- **The build stage's placeholders are inert and named as such:** they
+  exist because `next build` imports the app's modules, and the set is
+  exactly the three required keys — checked against `config/env.ts` rather
+  than assumed.
+- **Secrets cannot land in a layer by accident:** `.dockerignore` excludes
+  every `.env*` except the committed `.env.example`.
+- **What could not be verified is written down, not glossed:** this build
+  sandbox has no container runtime, so no image was built and no stack was
+  started here; the bootstrap DDL _was_ verified by running the whole suite
+  against a database it created, which is the part most likely to be wrong.

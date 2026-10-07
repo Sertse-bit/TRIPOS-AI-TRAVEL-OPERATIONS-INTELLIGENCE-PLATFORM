@@ -1,0 +1,76 @@
+# TripOS local stack — Phase 30: app + Postgres (with pgvector) + Redis.
+#
+#   AUTH_SECRET=$(openssl rand -hex 32) docker compose up --build
+#
+# AUTH_SECRET is required (no default) and compose refuses to start without
+# it — the same fail-fast contract src/config/env.ts applies to the process,
+# applied one layer up. The Postgres credentials below default to the same
+# throwaway values the README's local setup uses; override them through the
+# environment for anything that is not a laptop.
+#
+# The schema is created by mounting prisma/sql/bootstrap.sql into Postgres's
+# own /docker-entrypoint-initdb.d, which runs it **only when the data
+# directory is empty**. That is idempotency by construction rather than a
+# guard clause in a script: `docker compose up` twice in a row is a no-op for
+# the database. The cost is that editing bootstrap.sql later needs a fresh
+# volume to take effect:
+#
+#   docker compose down -v && docker compose up --build
+#
+# NOT VERIFIED IN THE BUILD SANDBOX: no container runtime exists there
+# (see the Dockerfile header and the Phase 30 entry of docs/BUILD_PROGRESS.md).
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tripos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tripos}
+      POSTGRES_DB: ${POSTGRES_DB:-tripos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Applied once, on first initialization of an empty data directory.
+      - ./prisma/sql/bootstrap.sql:/docker-entrypoint-initdb.d/10-bootstrap.sql:ro
+    ports:
+      # Exposed so psql/Prisma Studio on the host can reach it; harmless in
+      # dev, and a production deployment would drop this mapping.
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tripos} -d ${POSTGRES_DB:-tripos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tripos}:${POSTGRES_PASSWORD:-tripos}@db:5432/${POSTGRES_DB:-tripos}
+      REDIS_URL: redis://cache:6379
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set (32+ characters) - see .env.example}
+      # Provider keys stay optional: an unconfigured provider uses its
+      # documented mock adapter, and ANTHROPIC_API_KEY has no mock by design.
+      # Copying none of them in is a supported way to run this stack.
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
