@@ -54,7 +54,12 @@ function actualRoutes(): Map<string, Set<string>> {
 function documentedRoutes(): Map<string, Set<string>> {
   const routes = new Map<string, Set<string>>();
   for (const line of readFileSync(DOC_PATH, "utf8").split("\n")) {
-    const row = /^\| `([A-Z, ]+)` \| `([^`]+)` \|/.exec(line.trim());
+    // Prettier pads markdown table cells to align them, so the separator
+    // between cells is whitespace of arbitrary length — the pre-commit
+    // hook reformatted the table on the very first commit of this file
+    // and the stricter pattern matched nothing (caught by this test, in
+    // CI, immediately).
+    const row = /^\|\s*`([A-Z, ]+)`\s*\|\s*`([^`]+)`\s*\|/.exec(line.trim());
     if (!row) continue;
     const path = row[2];
     if (!path.startsWith("/api/")) continue;

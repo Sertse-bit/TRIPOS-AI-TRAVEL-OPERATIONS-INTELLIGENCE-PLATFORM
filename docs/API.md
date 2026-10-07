@@ -3,7 +3,7 @@
 The complete surface every route handler exposes, derived from the code
 rather than from a design document.
 
-**This table is enforced by a test** (`src/app/api/route-table.test.ts`):
+**This table is enforced by a test** (`src/app/api-route-table.test.ts`):
 it walks `src/app/api/**/route.ts`, reads the exported methods from each
 file, and fails if the table here is missing a route, lists one that no
 longer exists, or names the wrong methods. Adding or renaming a route
