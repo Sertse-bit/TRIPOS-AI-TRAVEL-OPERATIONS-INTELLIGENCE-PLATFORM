@@ -105,6 +105,50 @@ export async function findLatestSnapshotForFlight(
   };
 }
 
+/**
+ * The same "latest snapshot per flight" the single-flight reader returns,
+ * for many flights in one round trip (Phase 29).
+ *
+ * `DISTINCT ON (flight_record_id) ... ORDER BY flight_record_id,
+ * fetched_at DESC` is Postgres's idiom for exactly this shape, and the
+ * per-flight ordering it uses is the ordering the single-row query
+ * already used — so a caller that switched between the two cannot get a
+ * different answer. Driving it from an id array (rather than scanning
+ * every snapshot) keeps the cost proportional to the flights asked
+ * about. Flights with no snapshots are simply absent from the map.
+ */
+export async function findLatestSnapshotsForFlights(
+  flightRecordIds: string[],
+): Promise<Map<string, { status: string; delayMinutes: number | null; fetchedAt: Date }>> {
+  const snapshots = new Map<
+    string,
+    { status: string; delayMinutes: number | null; fetchedAt: Date }
+  >();
+  if (flightRecordIds.length === 0) return snapshots;
+
+  const result = await pool.query<{
+    flight_record_id: string;
+    status: string;
+    delay_minutes: number | null;
+    fetched_at: Date;
+  }>(
+    `SELECT DISTINCT ON (flight_record_id) flight_record_id, status, delay_minutes, fetched_at
+       FROM flight_status_snapshots
+      WHERE flight_record_id = ANY($1::text[])
+      ORDER BY flight_record_id, fetched_at DESC`,
+    [flightRecordIds],
+  );
+
+  for (const row of result.rows) {
+    snapshots.set(row.flight_record_id, {
+      status: row.status,
+      delayMinutes: row.delay_minutes,
+      fetchedAt: row.fetched_at,
+    });
+  }
+  return snapshots;
+}
+
 export type FlightStatusValue =
   "UNKNOWN" | "SCHEDULED" | "DELAYED" | "CANCELLED" | "LANDED" | "COMPLETED";
 

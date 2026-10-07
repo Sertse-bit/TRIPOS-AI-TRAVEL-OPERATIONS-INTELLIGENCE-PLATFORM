@@ -1,29 +1,29 @@
 import { requireSession } from "@/app/require-auth";
-import { listUserTrips, getTripDigitalTwin } from "@/modules/trip/trip-service";
+import { getUserTripEntityCounts, listUserTrips } from "@/modules/trip/trip-service";
 import { Card, SectionHeading, StatusBadge } from "@/components/ui";
 import { tripStatusTone } from "@/components/tone";
 
 export default async function AnalyticsPage() {
   const user = await requireSession("/trips/analytics");
-  const trips = await listUserTrips(user.id);
 
   // Real aggregates computed from the user's actual trips — every value
   // traces to a DB row; nothing is invented.
-  let destinationCount = 0;
-  let flightCount = 0;
-  let travelerCount = 0;
-  for (const trip of trips) {
-    const twin = await getTripDigitalTwin(trip.id, user.id);
-    destinationCount += twin.destinations.length;
-    flightCount += twin.flights.length;
-    travelerCount += twin.travelers.length;
-  }
+  //
+  // Phase 29: the counts come from one aggregate query rather than a
+  // digital twin per trip (which was ~12 queries per trip for four
+  // integers — measured, then fixed; see scripts/bench-read-paths.ts).
+  // The trip list is still a separate read because the status breakdown
+  // below renders each trip, not just its count.
+  const [trips, counts] = await Promise.all([
+    listUserTrips(user.id),
+    getUserTripEntityCounts(user.id),
+  ]);
 
   const stats = [
-    { label: "Trips", value: trips.length },
-    { label: "Destinations", value: destinationCount },
-    { label: "Flights", value: flightCount },
-    { label: "Travelers", value: travelerCount },
+    { label: "Trips", value: counts.trips },
+    { label: "Destinations", value: counts.destinations },
+    { label: "Flights", value: counts.flights },
+    { label: "Travelers", value: counts.travelers },
   ];
 
   return (

@@ -2499,7 +2499,85 @@ through a real login page render.
 
 ## Phase 29 — Performance
 
-**Status:** Not started
+**Status:** Complete
+
+Measured before changing anything, then fixed what the measurement showed —
+including reverting one optimisation the measurement contradicted.
+
+- **The harness (`scripts/bench-read-paths.ts`).** Seeds a representative
+  dataset into the **test** database (40 trips × 3 destinations, 4
+  flights, 2 travellers, 6 events, 3 audit rows), then runs the real read
+  paths the pages call, recording **SQL round trips** alongside wall clock
+  (median of three runs), and cleans up after itself. Query count is the
+  headline metric on purpose: this box's Postgres is local and the machine
+  has one CPU, so absolute milliseconds are both noisy and blind to the
+  per-query round-trip latency a deployed database would add — but
+  "queries per trip" is exactly the quantity that was wrong.
+- **Baseline, before any change (40 trips):** analytics 480 queries /
+  133.8 ms; one trip's digital twin 12 queries / 7.7 ms; the trip's
+  operational state 7 queries / 1.8 ms; the trip page's eight loads 24
+  queries / 9.1 ms; trips dashboard 1 query; audit stream 3 queries.
+- **Finding 1 — the analytics page was the N+1 it looked like.** It
+  called `getTripDigitalTwin` once per trip and added up array lengths,
+  which is ~12 round trips per trip to produce four integers. New
+  `getUserTripEntityCounts(userId)` computes all four in **one** query
+  (trips filtered by owner; each child table joined back through its
+  trip, so no child row is reachable through a trip the user doesn't
+  own). **480 → 1 query, 133.8 → 0.7 ms**, and flat in trip count. The
+  trip list is still read separately because the status breakdown
+  renders each trip.
+- **Finding 2 — the operational state asked per flight.**
+  `calculateOperationalState` looked up each flight's latest snapshot in
+  its own query. New `findLatestSnapshotsForFlights(ids)` does it in one
+  `DISTINCT ON (flight_record_id) … ORDER BY flight_record_id,
+fetched_at DESC` — the same ordering the single-flight query used, so
+  the answer is unchanged (pinned by a test that a re-scheduled flight
+  that was cancelled earlier reads as fine). **7 → 4 queries and 1.8 →
+  1.1 ms** on a 4-flight trip; constant in flight count, and the digital
+  twin that embeds it dropped **12 → 9 queries / 7.7 → 5.8 ms**.
+- **Finding 3 — the obvious next optimisation was measured and
+  rejected.** Wrapping the trip page's eight independent loads in one
+  `Promise.all` did not reduce a single query (24 either way) and was
+  **slower**: 26.6 ms median against 9.1 ms. With a local database and a
+  single CPU there is no round-trip latency left to overlap, and the
+  concurrency only adds contention. Reverted; the measurement and the
+  reasoning are recorded in the page itself so the next person doesn't
+  re-derive it from theory.
+
+**Deliberately not changed.** Indexes were checked rather than assumed:
+`destinations`, `flight_records`, `travelers`, `trip_documents`,
+`itinerary_items` and `trip_events` are already indexed by `trip_id`
+(`trip_events` also by `(trip_id, created_at)`) and `trips` by `user_id`,
+so every path above was already index-driven. No caching layer was added:
+these pages show live operational state, and a cache would buy
+milliseconds by making the page stale, which is the wrong trade for this
+product.
+
+**Regression tests:** `modules/trip/trip-read-performance.test.ts` (6
+new tests) pins the properties a future edit would break quietly — the
+aggregate costs **one** query no matter how many trips exist (with a
+second user's equally sized portfolio present, so the scoping predicate
+is genuinely exercised), it returns exactly the numbers the per-trip twin
+loop it replaced returned, it counts nothing belonging to another user,
+and the operational state costs a **fixed** four queries no matter how
+many flights exist. Wall-clock thresholds are deliberately not asserted;
+those belong to the harness.
+
+**Verification:** 470/470 tests (47 files), typecheck, lint, and build
+clean. Live smoke through the preview: register → create trip → add one
+destination + one flight → `/trips/analytics` rendered **1 / 1 / 1 / 0**
+(trips/destinations/flights/travelers) from the new aggregate, and the
+trip page rendered 200 after the snapshot batching. Smoke rows were
+deleted; dev and test databases are both back at zero rows.
+
+**Known limitations:** the milliseconds above are this sandbox's (local
+Postgres, one CPU, no network egress to real providers), so they are
+comparisons, not production predictions; the query counts are the numbers
+worth carrying forward. The harness is intentionally not in the suite —
+it seeds and deletes hundreds of rows, and a hermetic test suite is worth
+more than a benchmark that pollutes it.
+
+**Next phase:** Phase 30 — Docker.
 
 ---
 

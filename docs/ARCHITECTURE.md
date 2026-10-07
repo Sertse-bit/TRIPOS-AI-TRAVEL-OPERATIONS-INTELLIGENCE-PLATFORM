@@ -1030,3 +1030,41 @@ signup deliverability          only a real "undeliverable" verdict stops
   or the insert, never the database the whole suite shares, and they
   assert the caller's contract (return value, rejection, log line) rather
   than an internal call count alone.
+
+## 29. Read-Path Cost (Phase 29)
+
+Performance work here is measurement first, and the measured quantity is
+**SQL round trips**, not milliseconds: this build box runs Postgres
+locally on one CPU, so wall clock is noisy and hides the per-query latency
+a deployed database adds, while round trips per trip is the quantity that
+was actually wrong.
+
+```text
+quantity that must not scale      before              after
+analytics aggregates              ~12 queries/trip    1 query, flat
+                                  (480 for 40 trips)
+operational-state snapshots       1 query per flight  1 query, flat
+digital twin (embeds the above)   12 queries          9 queries
+```
+
+- **Aggregates are computed by the database, not assembled in
+  JavaScript:** `getUserTripEntityCounts` counts trips (owner-scoped) and
+  each child table joined back through its trip, in one statement. Doing
+  it in JS required reading every trip's full twin to add up four numbers.
+- **Batched reads must preserve the single-row semantics exactly:**
+  `findLatestSnapshotsForFlights` uses the same `fetched_at DESC`
+  ordering the per-flight query used, and a test pins that a flight
+  cancelled earlier and re-scheduled later reads as fine.
+- **A rejected optimisation is a result.** Parallelising the trip page's
+  eight independent loads was measured at 24 queries either way and
+  _slower_ (26.6 ms vs 9.1 ms) — local DB, one CPU, no round-trip latency
+  to overlap — so the sequential form shipped, with the measurement in a
+  comment where the next optimiser will look.
+- **Cost is pinned by tests, not by thresholds:** the suite asserts "one
+  query regardless of trips" and "four queries regardless of flights"
+  (`modules/trip/trip-read-performance.test.ts`); absolute timings live in
+  `scripts/bench-read-paths.ts`, which seeds the test database, measures,
+  and cleans up.
+- **No caching was added, deliberately:** these pages render live
+  operational state, and staleness would be a worse defect than the
+  milliseconds a cache would buy.

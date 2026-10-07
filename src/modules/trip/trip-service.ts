@@ -24,7 +24,7 @@ import {
   type FlightRecordRow,
   addFlightRecord as addFlightRow,
   findFlightsByTripId,
-  findLatestSnapshotForFlight,
+  findLatestSnapshotsForFlights,
 } from "@/modules/trip/flight-repository";
 import {
   type TripDocumentRecord,
@@ -90,6 +90,49 @@ export async function createTrip(
 
 export async function listUserTrips(userId: string): Promise<TripRecord[]> {
   return findTripsByUserId(userId);
+}
+
+/** The four counts the analytics page shows, per user. */
+export interface UserTripEntityCounts {
+  trips: number;
+  destinations: number;
+  flights: number;
+  travelers: number;
+}
+
+/**
+ * The analytics page's aggregates, in ONE query (Phase 29).
+ *
+ * It used to call `getTripDigitalTwin` per trip and add up array lengths,
+ * which meant roughly a dozen round trips per trip — 480 for a user with
+ * 40 trips, measured at 134 ms in scripts/bench-read-paths.ts — for four
+ * integers. The counts below are computed by Postgres over the same rows
+ * (`trips` filtered by owner, then each child table joined back through
+ * its trip), so the answer is identical while the cost is constant in the
+ * number of trips.
+ *
+ * Ownership is the `user_id = $1` predicate on trips, exactly as
+ * `listUserTrips` scopes it; no child row is ever counted through a trip
+ * this user does not own.
+ */
+export async function getUserTripEntityCounts(userId: string): Promise<UserTripEntityCounts> {
+  const result = await pool.query<{
+    trips: number;
+    destinations: number;
+    flights: number;
+    travelers: number;
+  }>(
+    `SELECT
+       (SELECT count(*) FROM trips WHERE user_id = $1)::int AS trips,
+       (SELECT count(*) FROM destinations d
+          JOIN trips t ON t.id = d.trip_id WHERE t.user_id = $1)::int AS destinations,
+       (SELECT count(*) FROM flight_records f
+          JOIN trips t ON t.id = f.trip_id WHERE t.user_id = $1)::int AS flights,
+       (SELECT count(*) FROM travelers v
+          JOIN trips t ON t.id = v.trip_id WHERE t.user_id = $1)::int AS travelers`,
+    [userId],
+  );
+  return result.rows[0];
 }
 
 export async function getTrip(tripId: string, userId: string): Promise<TripRecord> {
@@ -325,8 +368,14 @@ export async function calculateOperationalState(
   const factors: string[] = [];
   let worst: OperationalStateLabel = "ON_TRACK";
 
+  // Phase 29: every flight's latest snapshot in one query. The previous
+  // version asked per flight, so a trip with twenty flights paid twenty
+  // round trips to answer the same question. Factors are still built in
+  // flight order below, so the rendered result is unchanged.
+  const snapshots = await findLatestSnapshotsForFlights(flights.map((flight) => flight.id));
+
   for (const flight of flights) {
-    const snapshot = await findLatestSnapshotForFlight(flight.id);
+    const snapshot = snapshots.get(flight.id);
     if (!snapshot) continue;
 
     if (DISRUPTIVE_STATUSES.has(snapshot.status)) {

@@ -137,6 +137,17 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
   // A trip this session doesn't own (or that doesn't exist) renders the
   // app's 404, not a 500 — the same semantics the API has.
+  //
+  // Phase 29 measured these independent loads run as a `Promise.all`
+  // against the sequential awaits below: 24 queries in both shapes, and
+  // **slower** in parallel (26.6 ms vs 9.1 ms median) on this build box,
+  // where Postgres is local (sub-millisecond queries, so there is no
+  // round-trip latency left to hide) and the machine has one CPU. The
+  // theory that parallel wins over a real network is plausible but
+  // unmeasured here, so the sequential version — which is at least
+  // measured, and keeps each load's error obvious at its own line — is
+  // what shipped. See scripts/bench-read-paths.ts to re-run the
+  // comparison.
   const twin = await orNotFound(() => getTripDigitalTwin(id, user.id));
   const events = await orNotFound(() => getTripEventHistory(id, user.id));
   const { indexedChunks } = await orNotFound(() => getTripIndexStatus(id, user.id));

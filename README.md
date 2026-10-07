@@ -14,7 +14,7 @@ metric.
 - **Redis** (rate limiting, resilience cache)
 - **Anthropic** SDK behind a typed, bounded AI tool layer
 - **Tailwind CSS v4** with a project-specific theme token set
-- Vitest for tests (464 tests across 46 files, real Postgres/Redis where
+- Vitest for tests (470 tests across 47 files, real Postgres/Redis where
   database properties matter); pnpm for package management
 
 ## What works today
@@ -172,6 +172,11 @@ pnpm typecheck  # tsc --noEmit
 pnpm lint       # eslint
 pnpm test       # vitest run
 ```
+
+Read-path cost is measured with `pnpm tsx scripts/bench-read-paths.ts`,
+which seeds the test database, reports SQL round trips and median
+milliseconds per page path, and deletes everything it created — see
+docs/BUILD_PROGRESS.md (Phase 29) for the numbers and the method.
 
 The app fails fast at startup if `DATABASE_URL` or `AUTH_SECRET` is
 missing — a misconfigured environment should not limp into confusing
