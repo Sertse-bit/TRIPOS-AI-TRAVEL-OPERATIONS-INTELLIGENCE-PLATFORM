@@ -123,8 +123,13 @@ metric.
   failures this found (dark mode's headings were 1.06:1 — invisible) and
   what a static check still cannot see.
 
-See `docs/BUILD_PROGRESS.md` for phase-by-phase status and
-`docs/ARCHITECTURE.md` for the architecture.
+See `docs/README.md` for the documentation index (architecture, API
+reference, database, security, integrations, accessibility),
+`docs/BUILD_PROGRESS.md` for phase-by-phase status, and
+`docs/ARCHITECTURE.md` for the architecture. The HTTP surface — envelope,
+error codes, auth, rate limits, every route — is documented in
+`docs/API.md`, and a test fails the build if that table and the code ever
+disagree.
 
 ## Local setup
 

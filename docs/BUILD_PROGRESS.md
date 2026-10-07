@@ -2741,7 +2741,53 @@ follow-up phase needs the container running in CI).
 
 ## Phase 32 — Documentation
 
-**Status:** Not started
+**Status:** Complete
+
+Documentation had grown to seven documents across 30 phases with no index,
+no API reference, and — the real gap — no mechanism to keep either honest.
+This phase adds the missing reference, an index, and a test for each.
+
+- **`docs/API.md` — the HTTP reference, derived from the code.** The
+  envelope and error-code table come from `shared/api-response.ts` and
+  `shared/errors.ts`; auth, rate limits, and provider-failure behaviour
+  are quoted from the routes that implement them; and the **route table
+  has all 34 `/api` routes with their real exported methods**, collected
+  by walking `src/app/api/**/route.ts`. It also states two things that are
+  easy to get wrong from the outside: a stranger's resource answers 404
+  rather than 403, and `/api/observability` has **no role check** —
+  `requireRole` exists in the auth module but no route calls it, so any
+  signed-in session can read the deployment health panel. That is written
+  down rather than implied, because a reader's default assumption would be
+  the opposite.
+- **`docs/README.md` — an index** with a one-line purpose per document and
+  links to the repo-level entry points (`README.md`, `AGENTS.md`).
+- **Two tests that make the documentation enforceable, not advisory:**
+  `src/app/api/route-table.test.ts` (5 tests) re-derives the route table
+  from the filesystem and fails on a missing route, a stale row, or a
+  wrong method list — and also enforces the project rule that every API
+  route is wrapped in `withApiHandler`. `src/app/docs-index.test.ts`
+  (3 tests) fails when a document exists that the index doesn't link, when
+  an index link points at a file that isn't there, or when an index row
+  has no description. Both are guards against the failure mode this phase
+  exists to prevent: docs that were true once.
+
+**Verification:** the new guards were **mutation-checked rather than
+assumed**: renaming one path in the route table (`/api/trips/[id]/watch`
+→ `/api/trips/[id]/watch-typo`) made the test fail with
+`expected [ '/api/trips/[id]/watch' ] to deeply equal []`, and the change
+was then reverted. The full suite — **478/478 tests (49 files)** — plus
+typecheck, lint, and build are green.
+
+**Known limitations:** `docs/API.md` documents each endpoint's shape and
+behaviour, not a machine-readable request/response schema per route —
+there is no OpenAPI contract, because generating one honestly would need
+response schemas the codebase doesn't declare (zod validates inputs, not
+outputs), and inventing them would be documentation theatre. The index
+test checks that documents are linked and resolve, not that their prose
+is still accurate; that is what each phase's own verification section is
+for.
+
+**Next phase:** Phase 33 — Final Engineering Audit.
 
 ---
 

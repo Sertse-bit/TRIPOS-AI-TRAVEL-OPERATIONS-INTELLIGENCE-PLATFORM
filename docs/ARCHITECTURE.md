@@ -1122,3 +1122,31 @@ docker job    docker compose config -q → docker build -t tripos:ci .
 - **No deploy job yet, deliberately:** there is no deployment target, and
   a job that deploys nowhere is theatre. It slots in as a third job gated
   on `main` when one exists.
+
+## 32. Documentation (Phase 32)
+
+```text
+docs/API.md       envelope, error codes, auth, rate limits, all 34 routes
+docs/README.md    index: one line of purpose per document
+tests              api-route-table.test.ts  routes ↔ docs/API.md
+                   docs-index.test.ts       docs/ ↔ docs/README.md
+```
+
+- **A documented table is a contract, so a test enforces it.** The route
+  table in `docs/API.md` is re-derived from `src/app/api/**/route.ts` —
+  the exported methods of each file — and a missing route, a stale row, or
+  a wrong method list fails the suite. The same pass enforces the project
+  rule that every route is wrapped in `withApiHandler`. Mutation-checked:
+  corrupting one path in the table makes the test fail.
+- **The reference states uncomfortable facts.** A stranger's resource
+  answers 404 rather than 403, and `/api/observability` has no role check
+  (`requireRole` is implemented but not wired to any route), so the
+  document says that instead of letting a reader assume admin-only.
+- **What documentation cannot honestly be is named:** no OpenAPI contract,
+  because inputs are schema-checked but outputs are not declared anywhere
+  — a generated contract would be invented field-by-field. Docs stay
+  prose plus enforceable tables; accuracy beyond that comes from each
+  phase's verification section rather than from a second hand-written
+  restatement.
+- **The index is checked too:** a document nobody linked, or a link to a
+  file that doesn't exist, fails `docs-index.test.ts`.
